@@ -129,7 +129,7 @@ describe('handleMCPGet', () => {
 
     expect(response.status).toBe(200);
     expect(data.tools).toEqual(TOOLS);
-    expect(data.tools).toHaveLength(3);
+    expect(data.tools).toHaveLength(4);
   });
 
   it('should return 401 when unauthorized', async () => {
@@ -235,7 +235,7 @@ describe('handleMCPPost', () => {
 
     it('should handle tools/call method', async () => {
       const mockResult = {
-        content: [{ type: 'text', text: JSON.stringify([{ id: 1 }]) }],
+        content: [{ type: 'text' as const, text: JSON.stringify([{ id: 1 }]) }],
       };
       vi.mocked(handleListTransactions).mockReturnValue(mockResult);
 
@@ -362,7 +362,7 @@ describe('handleMCPPost', () => {
   describe('Simple Format', () => {
     it('should handle simple format with name and arguments', async () => {
       const mockResult = {
-        content: [{ type: 'text', text: JSON.stringify([]) }],
+        content: [{ type: 'text' as const, text: JSON.stringify([]) }],
       };
       vi.mocked(handleListGrantees).mockReturnValue(mockResult);
 
@@ -385,7 +385,7 @@ describe('handleMCPPost', () => {
 
     it('should handle simple format with show_grantee', async () => {
       const mockResult = {
-        content: [{ type: 'text', text: JSON.stringify({ metadata: {} }) }],
+        content: [{ type: 'text' as const, text: JSON.stringify({ metadata: {} }) }],
       };
       vi.mocked(handleShowGrantee).mockReturnValue(mockResult);
 

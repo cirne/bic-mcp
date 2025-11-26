@@ -1,10 +1,38 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   handleListTransactions,
   handleListGrantees,
   handleShowGrantee,
 } from './mcp-handlers';
 import type { Transaction } from './filters';
+
+// Mock the grantee-metadata module
+vi.mock('./grantee-metadata', () => ({
+  getGranteeCategory: vi.fn((charity: string, ein: string) => {
+    if (charity === 'Test Charity' && ein === '12-3456789') {
+      return 'Evangelism';
+    }
+    if (charity === 'Another Charity' && ein === '98-7654321') {
+      return 'Matthew 25';
+    }
+    if (charity === 'International Charity' && ein === '99-9999999') {
+      return 'Evangelism';
+    }
+    return null;
+  }),
+  getGranteeNotes: vi.fn((charity: string, ein: string) => {
+    if (charity === 'Test Charity' && ein === '12-3456789') {
+      return 'Test notes for Test Charity';
+    }
+    return null;
+  }),
+  getGranteeInternational: vi.fn((charity: string, ein: string) => {
+    if (charity === 'International Charity' && ein === '99-9999999') {
+      return true;
+    }
+    return false;
+  }),
+}));
 
 const mockTransactions: Transaction[] = [
   {
@@ -44,6 +72,10 @@ describe('handleListTransactions', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data).toHaveLength(3);
+    // Check that Category and International are included
+    expect(data[0]).toHaveProperty('Category');
+    expect(data[0]).toHaveProperty('International');
+    expect(typeof data[0].International).toBe('boolean');
   });
 
   it('should filter by charity', () => {
@@ -62,10 +94,11 @@ describe('handleListTransactions', () => {
     });
     const data = JSON.parse(result.content[0].text);
     expect(data).toHaveLength(2);
-    expect(data.every((t: Transaction) => 
-      t['Sent Date']?.includes('/24') || 
-      t['Requested Payment Date']?.includes('/24')
-    )).toBe(true);
+    expect(data.every((t: Transaction) => {
+      const sentDate = typeof t['Sent Date'] === 'string' ? t['Sent Date'] : '';
+      const reqDate = typeof t['Requested Payment Date'] === 'string' ? t['Requested Payment Date'] : '';
+      return sentDate.includes('/24') || reqDate.includes('/24');
+    })).toBe(true);
   });
 
   it('should filter by min_year', () => {
@@ -91,7 +124,8 @@ describe('handleListTransactions', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data).toHaveLength(2);
     data.forEach((t: Transaction) => {
-      const amount = parseFloat((t.Amount || '').replace(/,/g, '')) || 0;
+      const amountStr = typeof t.Amount === 'string' ? t.Amount : '';
+      const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
       expect(amount).toBeGreaterThanOrEqual(10000);
     });
   });
@@ -103,7 +137,8 @@ describe('handleListTransactions', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.length).toBeGreaterThanOrEqual(1);
     data.forEach((t: Transaction) => {
-      const amount = parseFloat((t.Amount || '').replace(/,/g, '')) || 0;
+      const amountStr = typeof t.Amount === 'string' ? t.Amount : '';
+      const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
       expect(amount).toBeLessThanOrEqual(10000);
     });
   });
@@ -147,8 +182,45 @@ describe('handleListTransactions', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data[0]).toHaveProperty('Charity');
     expect(data[0]).toHaveProperty('Amount');
+    expect(data[0]).toHaveProperty('Category'); // Category should always be included
+    expect(data[0]).toHaveProperty('International'); // International should always be included
     expect(data[0]).not.toHaveProperty('Transaction ID');
     expect(data[0]).not.toHaveProperty('Sent Date');
+  });
+
+  it('should filter by category', () => {
+    const result = handleListTransactions(mockTransactions, {
+      category: 'Evangelism',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    // All results should have Category = 'Evangelism'
+    data.forEach((t: Transaction & { Category?: string }) => {
+      expect(t.Category).toBe('Evangelism');
+    });
+  });
+
+  it('should filter by category (Matthew 25)', () => {
+    const result = handleListTransactions(mockTransactions, {
+      category: 'Matthew 25',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((t: Transaction & { Category?: string }) => {
+      expect(t.Category).toBe('Matthew 25');
+    });
+  });
+
+  it('should combine category filter with other filters', () => {
+    const result = handleListTransactions(mockTransactions, {
+      category: 'Evangelism',
+      year: 2024,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((t: Transaction & { Category?: string }) => {
+      expect(t.Category).toBe('Evangelism');
+    });
   });
 
   it('should group by year', () => {
@@ -234,6 +306,36 @@ describe('handleListTransactions', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data).toHaveLength(0);
   });
+
+  it('should include International field for all transactions', () => {
+    const result = handleListTransactions(mockTransactions, {});
+    const data = JSON.parse(result.content[0].text);
+    data.forEach((t: any) => {
+      expect(t).toHaveProperty('International');
+      expect(typeof t.International).toBe('boolean');
+    });
+  });
+
+  it('should set International field correctly based on grantee', () => {
+    const internationalTransaction: Transaction = {
+      'Transaction ID': '4',
+      'Charity': 'International Charity',
+      'EIN': '99-9999999',
+      'Charity Address': '789 International St',
+      'Amount': '20,000.00',
+      'Sent Date': '12/1/24',
+      'Grant Purpose': 'International grant',
+    };
+    const transactionsWithInternational = [...mockTransactions, internationalTransaction];
+    const result = handleListTransactions(transactionsWithInternational, {});
+    const data = JSON.parse(result.content[0].text);
+    const intlTransaction = data.find((t: any) => t.Charity === 'International Charity');
+    expect(intlTransaction).toBeDefined();
+    expect(intlTransaction.International).toBe(true);
+    // Other transactions should be false
+    const otherTransaction = data.find((t: any) => t.Charity === 'Test Charity');
+    expect(otherTransaction.International).toBe(false);
+  });
 });
 
 describe('handleListGrantees', () => {
@@ -244,8 +346,11 @@ describe('handleListGrantees', () => {
     expect(data).toHaveLength(2);
     expect(data[0]).toHaveProperty('name');
     expect(data[0]).toHaveProperty('ein');
+    expect(data[0]).toHaveProperty('international');
+    expect(data[0]).toHaveProperty('most_recent_grant_note');
     expect(data[0]).toHaveProperty('total_amount');
     expect(data[0]).toHaveProperty('transaction_count');
+    expect(typeof data[0].international).toBe('boolean');
   });
 
   it('should calculate total_amount correctly', () => {
@@ -339,6 +444,16 @@ describe('handleListGrantees', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data[0]).toHaveProperty('most_recent_grant_note');
   });
+
+  it('should include international field for all grantees', () => {
+    const result = handleListGrantees(mockTransactions, {});
+    const data = JSON.parse(result.content[0].text);
+    data.forEach((g: any) => {
+      expect(g).toHaveProperty('international');
+      expect(typeof g.international).toBe('boolean');
+    });
+  });
+
 });
 
 describe('handleShowGrantee', () => {
@@ -351,6 +466,8 @@ describe('handleShowGrantee', () => {
     expect(data.metadata.name).toBe('Test Charity');
     expect(data.metadata.ein).toBe('12-3456789');
     expect(data.metadata.address).toBe('123 Main St');
+    expect(data.metadata.category).toBe('Evangelism');
+    expect(data.metadata.notes).toBe('Test notes for Test Charity');
     expect(data.transactions).toHaveLength(2);
   });
 
@@ -439,6 +556,8 @@ describe('handleShowGrantee', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.metadata).toHaveProperty('first_grant_year');
     expect(data.metadata).toHaveProperty('last_grant_year');
+    expect(data.metadata).toHaveProperty('category');
+    expect(data.metadata).toHaveProperty('notes');
   });
 
   it('should handle empty transactions array', () => {

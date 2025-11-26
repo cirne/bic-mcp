@@ -1,6 +1,12 @@
 import Fuse from 'fuse.js';
 
-export type Transaction = Record<string, string>;
+export type Transaction = Record<string, string | boolean | null>;
+
+// Helper function to safely get string value from transaction field
+export function getStringValue(value: string | boolean | null | undefined): string {
+  if (typeof value === 'string') return value;
+  return '';
+}
 
 // Helper function to extract year from a date string
 export function extractYear(dateStr: string | undefined): number | null {
@@ -22,7 +28,7 @@ export function matchesYear(transaction: Transaction, year: number): boolean {
   const dateFields = ['Sent Date', 'Requested Payment Date', 'Recommendation Submitted Date', 'Cleared Date'];
   
   return dateFields.some(field => {
-    const date = (transaction[field] || '').trim();
+    const date = getStringValue(transaction[field]).trim();
     if (!date) return false;
     
     // Check if date ends with /YY (e.g., "2/15/24" for 2024)
@@ -46,7 +52,7 @@ export function matchesYearRange(transaction: Transaction, minYear?: number, max
   
   const dateFields = ['Sent Date', 'Requested Payment Date', 'Recommendation Submitted Date', 'Cleared Date'];
   const years = dateFields
-    .map(field => extractYear(transaction[field]))
+    .map(field => extractYear(getStringValue(transaction[field])))
     .filter(y => y !== null) as number[];
   
   if (years.length === 0) return false;
@@ -62,7 +68,7 @@ export function matchesYearRange(transaction: Transaction, minYear?: number, max
 // Helper function to check if a transaction matches the charity filter
 export function matchesCharity(transaction: Transaction, charityName: string): boolean {
   if (!charityName) return true;
-  const transactionCharity = (transaction.Charity || '').toLowerCase().trim();
+  const transactionCharity = getStringValue(transaction.Charity).toLowerCase().trim();
   return transactionCharity === charityName.toLowerCase().trim();
 }
 
@@ -70,7 +76,7 @@ export function matchesCharity(transaction: Transaction, charityName: string): b
 export function matchesMinAmount(transaction: Transaction, minAmount: number): boolean {
   if (!minAmount) return true;
   
-  const amountStr = (transaction.Amount || '').replace(/,/g, '').replace(/\s/g, '');
+  const amountStr = getStringValue(transaction.Amount).replace(/,/g, '').replace(/\s/g, '');
   const amount = parseFloat(amountStr) || 0;
   
   return amount >= minAmount;
@@ -80,7 +86,7 @@ export function matchesMinAmount(transaction: Transaction, minAmount: number): b
 export function matchesMaxAmount(transaction: Transaction, maxAmount: number): boolean {
   if (!maxAmount) return true;
   
-  const amountStr = (transaction.Amount || '').replace(/,/g, '').replace(/\s/g, '');
+  const amountStr = getStringValue(transaction.Amount).replace(/,/g, '').replace(/\s/g, '');
   const amount = parseFloat(amountStr) || 0;
   
   return amount <= maxAmount;
@@ -90,34 +96,43 @@ export function matchesMaxAmount(transaction: Transaction, maxAmount: number): b
 export function sortTransactions(transactions: Transaction[], sortBy: string, sortOrder: 'asc' | 'desc' = 'asc'): Transaction[] {
   if (!sortBy) return transactions;
   
-  return [...transactions].sort((a, b) => {
-    let aVal: any = a[sortBy] || '';
-    let bVal: any = b[sortBy] || '';
+  return [...transactions].sort((a, b): number => {
+    let aVal: any = a[sortBy];
+    let bVal: any = b[sortBy];
     
     // Special handling for Amount field
     if (sortBy === 'Amount') {
-      aVal = parseFloat((aVal || '').replace(/,/g, '').replace(/\s/g, '')) || 0;
-      bVal = parseFloat((bVal || '').replace(/,/g, '').replace(/\s/g, '')) || 0;
+      const aStr = getStringValue(aVal);
+      const bStr = getStringValue(bVal);
+      aVal = parseFloat(aStr.replace(/,/g, '').replace(/\s/g, '')) || 0;
+      bVal = parseFloat(bStr.replace(/,/g, '').replace(/\s/g, '')) || 0;
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     }
     
     // Special handling for date fields
-    if (sortBy.includes('Date')) {
-      const aYear = extractYear(aVal) || 0;
-      const bYear = extractYear(bVal) || 0;
+    else if (sortBy.includes('Date')) {
+      const aStr = getStringValue(aVal);
+      const bStr = getStringValue(bVal);
+      const aYear = extractYear(aStr) || 0;
+      const bYear = extractYear(bStr) || 0;
       if (aYear !== bYear) {
         return sortOrder === 'asc' ? aYear - bYear : bYear - aYear;
       }
       // If same year, compare as strings
-      return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      return sortOrder === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
     }
     
     // String comparison
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
+    else if (typeof aVal === 'string' && typeof bVal === 'string') {
       return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     }
     
-    // Numeric comparison
-    return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    // Convert to strings for comparison if needed
+    else {
+      const aStr = getStringValue(aVal);
+      const bStr = getStringValue(bVal);
+      return sortOrder === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+    }
   });
 }
 
@@ -134,11 +149,12 @@ export function groupTransactions(transactions: Transaction[], groupBy: string):
       // Extract year from date fields
       const dateFields = ['Sent Date', 'Requested Payment Date', 'Recommendation Submitted Date', 'Cleared Date'];
       const years = dateFields
-        .map(field => extractYear(transaction[field]))
+        .map(field => extractYear(getStringValue(transaction[field])))
         .filter(y => y !== null) as number[];
       key = years.length > 0 ? Math.max(...years).toString() : 'Unknown';
     } else {
-      key = (transaction[groupBy] || 'Unknown').toString();
+      const value = transaction[groupBy];
+      key = value !== undefined && value !== null ? String(value) : 'Unknown';
     }
     
     if (!grouped[key]) {
@@ -169,10 +185,20 @@ export function selectFields(transactions: Transaction[], fields: string[]): Tra
 export function applyFuzzySearch(transactions: Transaction[], searchTerm: string): Transaction[] {
   if (!searchTerm || transactions.length === 0) return transactions;
   
-  const fields = Object.keys(transactions[0]);
+  // Convert transactions to string-only format for Fuse.js
+  const stringTransactions = transactions.map(t => {
+    const strT: Record<string, string> = {};
+    Object.keys(t).forEach(key => {
+      const value = t[key];
+      strT[key] = typeof value === 'string' ? value : (value === null ? '' : String(value));
+    });
+    return strT;
+  });
+  
+  const fields = Object.keys(stringTransactions[0] || {});
   
   // Configure Fuse.js for fuzzy search
-  const fuse = new Fuse(transactions, {
+  const fuse = new Fuse(stringTransactions, {
     keys: fields,
     threshold: 0.4, // 0.0 = exact match, 1.0 = match anything
     ignoreLocation: true,
@@ -180,6 +206,7 @@ export function applyFuzzySearch(transactions: Transaction[], searchTerm: string
   });
 
   const results = fuse.search(searchTerm);
-  return results.map(result => result.item);
+  // Map back to original transactions
+  return results.map(result => transactions[result.refIndex]);
 }
 

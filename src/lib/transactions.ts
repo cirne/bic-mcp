@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { Transaction } from './filters';
 
 // Simple CSV line parser that handles quoted fields
 export function parseCSVLine(line: string): string[] {
@@ -30,8 +31,8 @@ export function parseCSVLine(line: string): string[] {
 }
 
 // Load transactions from CSV files
-export function loadTransactions(dataDir: string = join(process.cwd(), 'data')) {
-  const transactions: Record<string, string>[] = [];
+export function loadTransactions(dataDir: string = join(process.cwd(), 'data')): Transaction[] {
+  const transactions: Transaction[] = [];
   
   try {
     const files = readdirSync(dataDir).filter(file => file.endsWith('.csv'));
@@ -62,7 +63,7 @@ export function loadTransactions(dataDir: string = join(process.cwd(), 'data')) 
         const values = parseCSVLine(lines[i]);
         if (values.length === 0 || values[0] === '') continue;
         
-        const transaction: Record<string, string> = {};
+        const transaction: Transaction = {};
         headers.forEach((header, index) => {
           transaction[header] = values[index] || '';
         });

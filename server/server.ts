@@ -13,6 +13,7 @@ import {
   handleListTransactions,
   handleListGrantees,
   handleShowGrantee,
+  handleAggregateTransactions,
 } from '../src/lib/mcp-handlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -74,6 +75,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Optional: Filter transactions with amount less than or equal to this value',
             },
+            category: {
+              type: 'string',
+              description: 'Optional: Filter transactions by grantee category. Valid categories: "Evangelism", "Matthew 25", "Education/Schools", "Churches/Offerings"',
+            },
             sort_by: {
               type: 'string',
               description: 'Optional: Field to sort by (e.g., "Sent Date", "Amount"). Default: no sorting',
@@ -105,6 +110,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             year: {
               type: 'number',
               description: 'Optional: Filter to only grantees that received grants in this year (e.g., 2024). If provided, transaction count and total amount will be scoped to this year only.',
+            },
+            category: {
+              type: 'string',
+              description: 'Optional: Filter grantees by category. Valid categories: "Evangelism", "Matthew 25", "Education/Schools", "Churches/Offerings"',
             },
             sort_by: {
               type: 'string',
@@ -138,6 +147,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['charity'],
         },
       },
+      {
+        name: 'aggregate_transactions',
+        description: 'Aggregate grant transactions by category, grantee, or year. Returns summary statistics (count and total_amount) for each group. Only includes Payment Cleared grants. Use this tool for summary reports, category breakdowns, top grantees by amount, or yearly totals.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            group_by: {
+              type: 'string',
+              enum: ['category', 'grantee', 'year'],
+              description: 'Required: Field to aggregate by - "category" (Evangelism, Matthew 25, Education/Schools, Churches/Offerings), "grantee" (charity name), or "year"',
+            },
+            year: {
+              type: 'number',
+              description: 'Optional: Filter transactions by exact year (e.g., 2025). Checks all date fields.',
+            },
+            min_year: {
+              type: 'number',
+              description: 'Optional: Filter transactions from this year onwards (e.g., 2023 for "since 2023")',
+            },
+            max_year: {
+              type: 'number',
+              description: 'Optional: Filter transactions up to this year',
+            },
+            min_amount: {
+              type: 'number',
+              description: 'Optional: Filter transactions with amount greater than or equal to this value (e.g., 25000)',
+            },
+            max_amount: {
+              type: 'number',
+              description: 'Optional: Filter transactions with amount less than or equal to this value',
+            },
+            category: {
+              type: 'string',
+              description: 'Optional: Filter by category when grouping by grantee or year (e.g., "Evangelism", "Matthew 25")',
+            },
+            charity: {
+              type: 'string',
+              description: 'Optional: Filter by exact charity name when grouping by category or year',
+            },
+            sort_by: {
+              type: 'string',
+              enum: ['count', 'total_amount', 'name'],
+              description: 'Optional: Sort results by count, total_amount, or name. Default: total_amount',
+            },
+            sort_order: {
+              type: 'string',
+              enum: ['asc', 'desc'],
+              description: 'Optional: Sort order - "asc" or "desc". Default: desc',
+            },
+          },
+          required: ['group_by'],
+        },
+      },
     ],
   };
 });
@@ -156,6 +218,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       break;
     case 'show_grantee':
       result = handleShowGrantee(transactions, (args || {}) as Parameters<typeof handleShowGrantee>[1]);
+      break;
+    case 'aggregate_transactions':
+      result = handleAggregateTransactions(transactions, (args || {}) as Parameters<typeof handleAggregateTransactions>[1]);
       break;
     default:
       return {

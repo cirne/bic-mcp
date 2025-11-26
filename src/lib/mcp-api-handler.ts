@@ -4,6 +4,7 @@ import {
   handleListTransactions,
   handleListGrantees,
   handleShowGrantee,
+  handleAggregateTransactions,
 } from '@/lib/mcp-handlers';
 
 // Cache transactions in memory (Vercel serverless functions are stateless)
@@ -130,6 +131,59 @@ export const TOOLS = [
       required: ['charity'],
     },
   },
+  {
+    name: 'aggregate_transactions',
+    description: 'Aggregate grant transactions by category, grantee, or year. Returns summary statistics (count and total_amount) for each group. Only includes Payment Cleared grants. Use this tool for summary reports, category breakdowns, top grantees by amount, or yearly totals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        group_by: {
+          type: 'string',
+          enum: ['category', 'grantee', 'year'],
+          description: 'Required: Field to aggregate by - "category" (Evangelism, Matthew 25, Education/Schools, Churches/Offerings), "grantee" (charity name), or "year"',
+        },
+        year: {
+          type: 'number',
+          description: 'Optional: Filter transactions by exact year (e.g., 2025). Checks all date fields.',
+        },
+        min_year: {
+          type: 'number',
+          description: 'Optional: Filter transactions from this year onwards (e.g., 2023 for "since 2023")',
+        },
+        max_year: {
+          type: 'number',
+          description: 'Optional: Filter transactions up to this year',
+        },
+        min_amount: {
+          type: 'number',
+          description: 'Optional: Filter transactions with amount greater than or equal to this value (e.g., 25000)',
+        },
+        max_amount: {
+          type: 'number',
+          description: 'Optional: Filter transactions with amount less than or equal to this value',
+        },
+        category: {
+          type: 'string',
+          description: 'Optional: Filter by category when grouping by grantee or year (e.g., "Evangelism", "Matthew 25")',
+        },
+        charity: {
+          type: 'string',
+          description: 'Optional: Filter by exact charity name when grouping by category or year',
+        },
+        sort_by: {
+          type: 'string',
+          enum: ['count', 'total_amount', 'name'],
+          description: 'Optional: Sort results by count, total_amount, or name. Default: total_amount',
+        },
+        sort_order: {
+          type: 'string',
+          enum: ['asc', 'desc'],
+          description: 'Optional: Sort order - "asc" or "desc". Default: desc',
+        },
+      },
+      required: ['group_by'],
+    },
+  },
 ];
 
 // Handle GET requests (list tools)
@@ -237,6 +291,9 @@ export async function handleMCPPost(request: NextRequest) {
               break;
             case 'show_grantee':
               result = handleShowGrantee(transactions, toolArguments);
+              break;
+            case 'aggregate_transactions':
+              result = handleAggregateTransactions(transactions, toolArguments);
               break;
             default:
               console.error('[MCP] ERROR: Unknown tool requested:', toolName);

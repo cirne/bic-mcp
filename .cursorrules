@@ -18,6 +18,8 @@ MCP server for querying grant transaction data from Beloved In Christ Foundation
 - Yearly summary: `show_grantee({ charity: "Name" })` (returns yearly totals automatically)
 - Large grants: `list_transactions({ year: 2024, min_amount: 25000, sort_by: "Amount", sort_order: "desc" })`
 - Top grantees: `list_grantees({ year: 2024, sort_by: "total_amount", sort_order: "desc" })`
+- Category breakdown: `aggregate_transactions({ group_by: "category", year: 2024, sort_by: "total_amount", sort_order: "desc" })`
+- International vs domestic: **Use `list_grantees({ year: 2024 })`** - it already returns `international` (boolean) and `total_amount` for each grantee, so you can simply sum amounts grouped by `international` status. This is the simplest approach - no need for `aggregate_transactions` or custom aggregation code.
 
 ### Response Formatting
 - Format amounts: "$500,000" not "500000.00"
@@ -45,10 +47,30 @@ When asked about these organizations, **include grants to related entities**:
 - Many grants explicitly state "Donation for Dean Braxton Ministries" in grant purpose
 - Clarify that grants support Dean Braxton Ministries
 
+### Grant Categorization
+
+When categorizing grants, use these four buckets:
+
+#### *Evangelism*
+- Organizations focused on evangelism and outreach
+- Examples: Young Life, Pine Cove, Luis Palau Association, etc.
+
+#### *Matthew 25* (Supporting the Needy)
+- Organizations supporting widows, orphans, and those in need
+- Examples: Bright City Ministries (James 29 fund to support widows and orphans), food banks, etc.
+
+#### *Education/Schools*
+- Educational institutions and school-related organizations
+- Examples: He Touched Me (Zambia school), Trinity College School (TCS), Faith Academy, University of Texas, etc.
+
+#### *Churches/Offerings*
+- All churches and church offerings (excluding Bright City Ministries, which is categorized under Matthew 25)
+
 ### When to Use Each Tool
-- **`list_transactions`**: Search/filter individual transactions (amounts, dates, purposes)
-- **`list_grantees`**: Aggregated grantee data, especially top grantees queries
-- **`show_grantee`**: Complete grantee history with yearly totals
+- **`list_transactions`**: Search/filter individual transactions (amounts, dates, purposes). Returns transactions with `Category` and `International` fields.
+- **`list_grantees`**: Aggregated grantee data, especially top grantees queries. Returns `international` field for each grantee.
+- **`show_grantee`**: Complete grantee history with yearly totals. Returns `international` field in metadata.
+- **`aggregate_transactions`**: Summary statistics grouped by category, grantee, or year. Returns count and total_amount for each group. Only includes "Payment Cleared" grants. Use for category breakdowns, yearly totals, or grantee summaries.
 
 ---
 
@@ -71,7 +93,20 @@ When asked about these organizations, **include grants to related entities**:
 
 #### `show_grantee` - Detailed grantee info
 **Parameters:** `charity` (required, exact name)
-**Returns:** Metadata, yearly totals, all transactions
+**Returns:** Metadata (including `international`), yearly totals, all transactions
+
+#### `aggregate_transactions` - Aggregate transactions with summary statistics
+**Parameters:** 
+- `group_by` (required): "category", "grantee", or "year"
+- `year`/`min_year`/`max_year`: Filter by year range
+- `min_amount`/`max_amount`: Filter by amount range
+- `category`: Filter by category when grouping by grantee or year
+- `charity`: Filter by exact charity name when grouping by category or year
+- `sort_by`: "count", "total_amount", or "name" (default: "total_amount")
+- `sort_order`: "asc" or "desc" (default: "desc")
+**Returns:** Array of objects with `name`, `count`, and `total_amount` for each group
+**Use for:** Category breakdowns, yearly totals, grantee summaries, international vs domestic analysis
+**Note:** Only includes "Payment Cleared" grants
 
 ### Implementation Notes
 - Fuzzy search uses Fuse.js (threshold 0.4)

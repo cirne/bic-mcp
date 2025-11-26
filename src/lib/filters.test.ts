@@ -256,9 +256,12 @@ describe('sortTransactions', () => {
       { 'Amount': '3,000.00 ', 'Charity': 'B' },
     ];
     const sorted = sortTransactions(transactions, 'Amount', 'asc');
-    expect(parseFloat(sorted[0].Amount.replace(/,/g, ''))).toBe(1000);
-    expect(parseFloat(sorted[1].Amount.replace(/,/g, ''))).toBe(3000);
-    expect(parseFloat(sorted[2].Amount.replace(/,/g, ''))).toBe(5000);
+    const amount0 = typeof sorted[0].Amount === 'string' ? sorted[0].Amount : '';
+    const amount1 = typeof sorted[1].Amount === 'string' ? sorted[1].Amount : '';
+    const amount2 = typeof sorted[2].Amount === 'string' ? sorted[2].Amount : '';
+    expect(parseFloat(amount0.replace(/,/g, ''))).toBe(1000);
+    expect(parseFloat(amount1.replace(/,/g, ''))).toBe(3000);
+    expect(parseFloat(amount2.replace(/,/g, ''))).toBe(5000);
   });
 
   it('should sort by Amount descending', () => {
@@ -268,9 +271,12 @@ describe('sortTransactions', () => {
       { 'Amount': '3,000.00 ', 'Charity': 'B' },
     ];
     const sorted = sortTransactions(transactions, 'Amount', 'desc');
-    expect(parseFloat(sorted[0].Amount.replace(/,/g, ''))).toBe(5000);
-    expect(parseFloat(sorted[1].Amount.replace(/,/g, ''))).toBe(3000);
-    expect(parseFloat(sorted[2].Amount.replace(/,/g, ''))).toBe(1000);
+    const amount0 = typeof sorted[0].Amount === 'string' ? sorted[0].Amount : '';
+    const amount1 = typeof sorted[1].Amount === 'string' ? sorted[1].Amount : '';
+    const amount2 = typeof sorted[2].Amount === 'string' ? sorted[2].Amount : '';
+    expect(parseFloat(amount0.replace(/,/g, ''))).toBe(5000);
+    expect(parseFloat(amount1.replace(/,/g, ''))).toBe(3000);
+    expect(parseFloat(amount2.replace(/,/g, ''))).toBe(1000);
   });
 
   it('should sort by date field (year first, then string)', () => {
@@ -280,9 +286,12 @@ describe('sortTransactions', () => {
       { 'Sent Date': '6/15/24', 'Charity': 'B' },
     ];
     const sorted = sortTransactions(transactions, 'Sent Date', 'asc');
-    expect(extractYear(sorted[0]['Sent Date'])).toBe(2023);
-    expect(extractYear(sorted[1]['Sent Date'])).toBe(2024);
-    expect(extractYear(sorted[2]['Sent Date'])).toBe(2024);
+    const date0 = typeof sorted[0]['Sent Date'] === 'string' ? sorted[0]['Sent Date'] : '';
+    const date1 = typeof sorted[1]['Sent Date'] === 'string' ? sorted[1]['Sent Date'] : '';
+    const date2 = typeof sorted[2]['Sent Date'] === 'string' ? sorted[2]['Sent Date'] : '';
+    expect(extractYear(date0)).toBe(2023);
+    expect(extractYear(date1)).toBe(2024);
+    expect(extractYear(date2)).toBe(2024);
   });
 
   it('should sort by string field', () => {
@@ -313,8 +322,10 @@ describe('sortTransactions', () => {
       { 'Amount': '1,000.00 ' },
     ];
     const sorted = sortTransactions(transactions, 'Amount', 'asc');
-    expect(parseFloat(transactions[0].Amount.replace(/,/g, ''))).toBe(5000);
-    expect(parseFloat(sorted[0].Amount.replace(/,/g, ''))).toBe(1000);
+    const origAmount = typeof transactions[0].Amount === 'string' ? transactions[0].Amount : '';
+    const sortedAmount = typeof sorted[0].Amount === 'string' ? sorted[0].Amount : '';
+    expect(parseFloat(origAmount.replace(/,/g, ''))).toBe(5000);
+    expect(parseFloat(sortedAmount.replace(/,/g, ''))).toBe(1000);
   });
 });
 
@@ -474,4 +485,5 @@ describe('applyFuzzySearch', () => {
     expect(results[0]['Grant Purpose']).toContain('Education');
   });
 });
+
 
