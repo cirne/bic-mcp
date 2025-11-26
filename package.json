@@ -1,0 +1,21 @@
+{
+  "name": "bic-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for grant transaction analysis",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js",
+    "test:client": "node test-client.js",
+    "test:filter": "node test-filter.js"
+  },
+  "keywords": ["mcp", "grants"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "fuse.js": "^7.0.0"
+  }
+}
+
