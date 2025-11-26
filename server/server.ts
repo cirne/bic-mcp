@@ -146,16 +146,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  let result;
+  let result: { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
   switch (name) {
     case 'list_transactions':
-      result = handleListTransactions(transactions, args || {});
+      result = handleListTransactions(transactions, (args || {}) as Parameters<typeof handleListTransactions>[1]);
       break;
     case 'list_grantees':
-      result = handleListGrantees(transactions, args || {});
+      result = handleListGrantees(transactions, (args || {}) as Parameters<typeof handleListGrantees>[1]);
       break;
     case 'show_grantee':
-      result = handleShowGrantee(transactions, args || {});
+      result = handleShowGrantee(transactions, (args || {}) as Parameters<typeof handleShowGrantee>[1]);
       break;
     default:
       return {

@@ -11,15 +11,17 @@ function validateGuid(guid: string): boolean {
   return guid === configuredGuid;
 }
 
-export async function GET(request: NextRequest, { params }: { params: { guid: string } }) {
-  if (!validateGuid(params.guid)) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ guid: string }> }) {
+  const { guid } = await params;
+  if (!validateGuid(guid)) {
     return new Response('Not Found', { status: 404 });
   }
   return handleMCPGet(request);
 }
 
-export async function POST(request: NextRequest, { params }: { params: { guid: string } }) {
-  if (!validateGuid(params.guid)) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ guid: string }> }) {
+  const { guid } = await params;
+  if (!validateGuid(guid)) {
     return new Response('Not Found', { status: 404 });
   }
   return handleMCPPost(request);

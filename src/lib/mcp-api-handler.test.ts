@@ -17,6 +17,11 @@ vi.mock('./transactions', () => ({
 import { handleListTransactions, handleListGrantees, handleShowGrantee } from './mcp-handlers';
 import { loadTransactions } from './transactions';
 
+// Suppress console.error during tests to reduce noise from expected error logs
+beforeEach(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
 const mockTransactions: Transaction[] = [
   {
     'Transaction ID': '1',
