@@ -59,7 +59,8 @@ npm run dev
 ```
 
 5. Access the web UI at `http://localhost:3000`
-6. Access the MCP API at `http://localhost:3000/api/mcp`
+6. Check your MCP endpoint URL at `http://localhost:3000/api/status`
+7. Access the MCP API at `http://localhost:3000/{guid}/mcp` (where `{guid}` is your `MCP_GUID` environment variable)
 
 ## Project Structure
 
@@ -173,7 +174,7 @@ See [DEPLOY.md](./docs/DEPLOY.md) for detailed deployment instructions.
 2. Set `MCP_API_KEY` environment variable
 3. Deploy!
 
-Your MCP server will be available at `https://your-project.vercel.app/api/mcp`
+Your MCP server will be available at `https://your-project.vercel.app/{guid}/mcp` (where `{guid}` is your `MCP_GUID` environment variable)
 
 ### Setting Up ChatGPT Desktop
 
@@ -183,8 +184,11 @@ See [CHATGPT_SETUP.md](./docs/CHATGPT_SETUP.md) for instructions on connecting C
 
 ### Environment Variables
 
-- `MCP_API_KEY` - API key for securing the `/api/mcp` endpoint (required for production)
+- `MCP_GUID` - GUID used in the endpoint path `/{guid}/mcp` (required - acts as security token)
+- `MCP_API_KEY` - API key for additional authentication (optional)
 - `DATA_DIR` - Custom path to data directory (defaults to `./data`)
+
+**Important**: The MCP endpoint is now at `/{guid}/mcp` where `{guid}` is the value of `MCP_GUID`. This provides basic security by obscuring the endpoint URL.
 
 ### CSV File Requirements
 

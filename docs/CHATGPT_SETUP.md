@@ -5,8 +5,9 @@ This guide explains how to connect ChatGPT Desktop to your deployed BIC Grants M
 ## Prerequisites
 
 - ChatGPT Desktop app installed
-- Access to your deployed MCP server URL (e.g., `https://your-project.vercel.app/api/mcp`)
-- Your MCP API key (provided by the server administrator)
+- Access to your deployed MCP server URL (e.g., `https://your-project.vercel.app/{guid}/mcp` where `{guid}` is your MCP_GUID)
+- Your MCP GUID (provided by the server administrator - acts as the security token)
+- Your MCP API key (optional, if additional authentication is configured)
 
 ## Step 1: Enable Developer Mode
 
@@ -23,7 +24,7 @@ This guide explains how to connect ChatGPT Desktop to your deployed BIC Grants M
 2. Fill in the connector details:
    - **Name**: `BIC Grants` (or any name you prefer)
    - **Description**: `MCP server for querying BIC grant transaction data` (optional)
-   - **Connector URL**: `https://your-project.vercel.app/api/mcp`
+   - **Connector URL**: `https://your-project.vercel.app/{guid}/mcp` (replace `{guid}` with your actual MCP_GUID)
    - **API Key**: Enter your MCP API key here (if the connector UI supports it)
 3. Click **Create** to save the connector
 
@@ -34,8 +35,9 @@ Since ChatGPT Desktop may not have a built-in API key field, you may need to con
 ### Option A: URL Parameter (if supported)
 Some MCP implementations support API keys as URL parameters:
 ```
-https://your-project.vercel.app/api/mcp?api_key=YOUR_API_KEY
+https://your-project.vercel.app/{guid}/mcp?api_key=YOUR_API_KEY
 ```
+(Replace `{guid}` with your actual MCP_GUID)
 
 ### Option B: Custom Header Configuration
 If ChatGPT Desktop allows custom headers, configure:
@@ -90,9 +92,10 @@ Get detailed information about a specific grantee.
 
 1. **Verify the URL**: Ensure the connector URL is correct and accessible
    ```bash
-   curl https://your-project.vercel.app/api/mcp \
+   curl https://your-project.vercel.app/{guid}/mcp \
      -H "Authorization: Bearer YOUR_API_KEY"
    ```
+   (Replace `{guid}` with your actual MCP_GUID)
 
 2. **Check API Key**: Verify your API key is correct and matches the one set in Vercel
 

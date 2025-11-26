@@ -23,14 +23,16 @@ The server will start on `http://localhost:3000`
 ### Test GET (List Tools)
 
 ```bash
-curl http://localhost:3000/api/mcp
+# Replace {guid} with your MCP_GUID environment variable
+curl http://localhost:3000/{guid}/mcp
 ```
 
 ### Test POST (Call a Tool)
 
 ```bash
 # List top grantees
-curl -X POST http://localhost:3000/api/mcp \
+# Replace {guid} with your MCP_GUID environment variable
+curl -X POST http://localhost:3000/{guid}/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "name": "list_grantees",
@@ -43,7 +45,7 @@ curl -X POST http://localhost:3000/api/mcp \
 
 ```bash
 # List transactions
-curl -X POST http://localhost:3000/api/mcp \
+curl -X POST http://localhost:3000/{guid}/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "name": "list_transactions",
@@ -76,11 +78,11 @@ Forwarding  https://abc123.ngrok-free.app -> http://localhost:3000
 Replace `YOUR_NGROK_URL` with your actual ngrok URL:
 
 ```bash
-# Test GET
-curl https://YOUR_NGROK_URL.ngrok-free.app/api/mcp
+# Test GET (replace {guid} with your MCP_GUID)
+curl https://YOUR_NGROK_URL.ngrok-free.app/{guid}/mcp
 
 # Test POST
-curl -X POST https://YOUR_NGROK_URL.ngrok-free.app/api/mcp \
+curl -X POST https://YOUR_NGROK_URL.ngrok-free.app/{guid}/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "name": "list_grantees",
@@ -94,7 +96,7 @@ curl -X POST https://YOUR_NGROK_URL.ngrok-free.app/api/mcp \
 **Note:** If you set `MCP_API_KEY` environment variable, you'll need to include it:
 
 ```bash
-curl https://YOUR_NGROK_URL.ngrok-free.app/api/mcp \
+curl https://YOUR_NGROK_URL.ngrok-free.app/{guid}/mcp \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -106,7 +108,7 @@ curl https://YOUR_NGROK_URL.ngrok-free.app/api/mcp \
 2. **Create Connector**:
    - Settings → Connectors → Create
    - **Name**: `BIC Grants (Local)`
-   - **Connector URL**: `https://YOUR_NGROK_URL.ngrok-free.app/api/mcp`
+   - **Connector URL**: `https://YOUR_NGROK_URL.ngrok-free.app/{guid}/mcp` (replace `{guid}` with your MCP_GUID)
    - **API Key** (if using): Add your API key if you set `MCP_API_KEY`
 
 3. **Test in ChatGPT**:
@@ -144,7 +146,10 @@ curl https://YOUR_NGROK_URL.ngrok-free.app/api/mcp \
 Create a `.env.local` file (not committed to git) for local testing:
 
 ```bash
-# Optional: Set API key for testing auth
+# Required: Set GUID for endpoint security
+MCP_GUID=db7779a6-cd30-466a-a564-00c44fd06e76
+
+# Optional: Set API key for additional auth
 MCP_API_KEY=test-key-123
 
 # Optional: Custom data directory
