@@ -12,6 +12,7 @@ export interface GranteeMetadata {
   category: string;
   notes: string | null;
   international?: boolean;
+  is_beloved?: boolean;
 }
 
 let granteeMetadataCache: Record<string, GranteeMetadata> | null = null;
@@ -131,5 +132,11 @@ export function getGranteeNotes(charityName: string, ein: string): string | null
 export function getGranteeInternational(charityName: string, ein: string): boolean {
   const meta = getGranteeMetadata(charityName, ein);
   return meta?.international || false;
+}
+
+// Get is_beloved status for a grantee
+export function getGranteeIsBeloved(charityName: string, ein: string): boolean {
+  const meta = getGranteeMetadata(charityName, ein);
+  return meta?.is_beloved || false;
 }
 

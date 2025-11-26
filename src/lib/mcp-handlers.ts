@@ -17,7 +17,7 @@ import {
   getMostRecentGrantNote,
   findGrantee,
 } from './grantees';
-import { getGranteeCategory, getGranteeInternational, getGranteeNotes } from './grantee-metadata';
+import { getGranteeCategory, getGranteeInternational, getGranteeIsBeloved, getGranteeNotes } from './grantee-metadata';
 
 export interface MCPToolResult {
   content: Array<{
@@ -38,6 +38,7 @@ export function handleListTransactions(
     max_year?: number;
     min_amount?: number;
     max_amount?: number;
+    is_beloved?: boolean | null;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
     group_by?: string;
@@ -53,6 +54,7 @@ export function handleListTransactions(
     max_year: maxYear,
     min_amount: minAmount,
     max_amount: maxAmount,
+    is_beloved: isBeloved,
     sort_by: sortBy,
     sort_order: sortOrder = 'asc',
     group_by: groupBy,
@@ -185,17 +187,30 @@ export function handleListTransactions(
     });
   }
 
-  // Add category and international fields to each transaction
+  // Apply is_beloved filter if provided (before adding Is Beloved field)
+  // undefined or null means include everything (beloved and non-beloved)
+  if (isBeloved !== undefined && isBeloved !== null) {
+    matches = matches.filter(t => {
+      const charityName = getStringValue(t.Charity).trim();
+      const ein = getStringValue(t.EIN).trim();
+      const granteeIsBeloved = getGranteeIsBeloved(charityName, ein);
+      return granteeIsBeloved === isBeloved;
+    });
+  }
+
+  // Add category, international, and is_beloved fields to each transaction
   matches = matches.map(transaction => {
     const charity = getStringValue(transaction.Charity).trim();
     const ein = getStringValue(transaction.EIN).trim();
     const category = getGranteeCategory(charity, ein);
     const international = getGranteeInternational(charity, ein);
+    const isBelovedValue = getGranteeIsBeloved(charity, ein);
     
     return {
       ...transaction,
       Category: category || null,
       International: international,
+      'Is Beloved': isBelovedValue,
     };
   });
 
@@ -207,7 +222,7 @@ export function handleListTransactions(
   // Apply field selection
   if (fields && fields.length > 0) {
     matches = selectFields(matches, fields);
-    // Always ensure Category and International are included
+    // Always ensure Category, International, and Is Beloved are included
     matches = matches.map(transaction => {
       const charity = getStringValue(transaction.Charity).trim();
       const ein = getStringValue(transaction.EIN).trim();
@@ -218,6 +233,10 @@ export function handleListTransactions(
       if (transaction.International === undefined) {
         const international = getGranteeInternational(charity, ein);
         transaction.International = international;
+      }
+      if (transaction['Is Beloved'] === undefined) {
+        const isBelovedValue = getGranteeIsBeloved(charity, ein);
+        transaction['Is Beloved'] = isBelovedValue;
       }
       return transaction;
     });
@@ -232,7 +251,7 @@ export function handleListTransactions(
       const groupedWithFields: Record<string, Transaction[]> = {};
       Object.keys(grouped).forEach(key => {
         let groupTransactions = selectFields(grouped[key], fields);
-        // Always ensure Category and International are included
+        // Always ensure Category, International, and Is Beloved are included
         groupTransactions = groupTransactions.map(transaction => {
           const charity = getStringValue(transaction.Charity).trim();
           const ein = getStringValue(transaction.EIN).trim();
@@ -243,6 +262,10 @@ export function handleListTransactions(
           if (transaction.International === undefined) {
             const international = getGranteeInternational(charity, ein);
             transaction.International = international;
+          }
+          if (transaction['Is Beloved'] === undefined) {
+            const isBelovedValue = getGranteeIsBeloved(charity, ein);
+            transaction['Is Beloved'] = isBelovedValue;
           }
           return transaction;
         });
@@ -270,12 +293,16 @@ export function handleListGrantees(
   transactions: Transaction[],
   args: {
     year?: number;
+    category?: string;
+    is_beloved?: boolean | null;
     sort_by?: 'name' | 'ein' | 'recent_date' | 'total_amount';
     sort_order?: 'asc' | 'desc';
   }
 ): MCPToolResult {
   const {
     year,
+    category,
+    is_beloved: isBeloved,
     sort_by: sortBy = 'name',
     sort_order: sortOrder = 'asc',
   } = args;
@@ -309,6 +336,20 @@ export function handleListGrantees(
         return null;
       }
 
+      // Filter by category if provided
+      if (category !== undefined) {
+        const granteeCategory = getGranteeCategory(grantee.name, grantee.ein);
+        if (granteeCategory?.toLowerCase() !== category.toLowerCase()) {
+          return null;
+        }
+      }
+
+      // Filter by is_beloved if provided
+      // undefined or null means include everything (beloved and non-beloved)
+      if (isBeloved !== undefined && isBeloved !== null && grantee.is_beloved !== isBeloved) {
+        return null;
+      }
+
       // Calculate total amount for filtered transactions
       const totalAmount = relevantTransactions.reduce((sum, t) => {
         const amountStr = getStringValue(t.Amount).replace(/,/g, '').replace(/\s/g, '');
@@ -322,6 +363,7 @@ export function handleListGrantees(
         name: grantee.name,
         ein: grantee.ein || '(no EIN)',
         international: grantee.international,
+        is_beloved: grantee.is_beloved,
         most_recent_grant_note: mostRecentNote || '(no notes)',
         transaction_count: relevantTransactions.length,
         total_amount: totalAmount,
@@ -331,6 +373,7 @@ export function handleListGrantees(
       name: string;
       ein: string;
       international: boolean;
+      is_beloved: boolean;
       most_recent_grant_note: string | null;
       transaction_count: number;
       total_amount: number;
@@ -500,6 +543,7 @@ export function handleShowGrantee(
       category: category || null,
       notes: notes || null,
       international: grantee.international,
+      is_beloved: grantee.is_beloved,
       total_grants: grantee.transactions.length,
       total_amount: totalAmount,
       first_grant_year: firstGrantYear,
@@ -522,7 +566,7 @@ export function handleShowGrantee(
 export function handleAggregateTransactions(
   transactions: Transaction[],
   args: {
-    group_by: 'category' | 'grantee' | 'year';
+    group_by: 'category' | 'grantee' | 'year' | 'international' | 'is_beloved';
     year?: number;
     min_year?: number;
     max_year?: number;
@@ -530,6 +574,7 @@ export function handleAggregateTransactions(
     max_amount?: number;
     category?: string;
     charity?: string;
+    is_beloved?: boolean | null;
     sort_by?: 'count' | 'total_amount' | 'name';
     sort_order?: 'asc' | 'desc';
   }
@@ -543,17 +588,18 @@ export function handleAggregateTransactions(
     max_amount: maxAmount,
     category,
     charity,
+    is_beloved: isBeloved,
     sort_by: sortBy = 'total_amount',
     sort_order: sortOrder = 'desc',
   } = args;
 
   // Validate group_by
-  if (!groupBy || !['category', 'grantee', 'year'].includes(groupBy)) {
+  if (!groupBy || !['category', 'grantee', 'year', 'international', 'is_beloved'].includes(groupBy)) {
     return {
       content: [
         {
           type: 'text',
-          text: 'Error: group_by must be one of: category, grantee, year',
+          text: 'Error: group_by must be one of: category, grantee, year, international, is_beloved',
         },
       ],
       isError: true,
@@ -596,6 +642,17 @@ export function handleAggregateTransactions(
     });
   }
 
+  // Filter by is_beloved (if grouping by something else)
+  // undefined or null means include everything (beloved and non-beloved)
+  if (isBeloved !== undefined && isBeloved !== null && groupBy !== 'is_beloved') {
+    matches = matches.filter(t => {
+      const charityName = getStringValue(t.Charity).trim();
+      const ein = getStringValue(t.EIN).trim();
+      const granteeIsBeloved = getGranteeIsBeloved(charityName, ein);
+      return granteeIsBeloved === isBeloved;
+    });
+  }
+
   // Only include Payment Cleared grants
   matches = matches.filter(t => getStringValue(t['Grant Status']) === 'Payment Cleared');
 
@@ -619,6 +676,16 @@ export function handleAggregateTransactions(
     } else if (groupBy === 'year') {
       const year = extractYear(getStringValue(transaction['Sent Date']));
       key = year ? year.toString() : 'Unknown';
+    } else if (groupBy === 'international') {
+      const charityName = getStringValue(transaction.Charity).trim();
+      const ein = getStringValue(transaction.EIN).trim();
+      const international = getGranteeInternational(charityName, ein);
+      key = international ? 'true' : 'false';
+    } else if (groupBy === 'is_beloved') {
+      const charityName = getStringValue(transaction.Charity).trim();
+      const ein = getStringValue(transaction.EIN).trim();
+      const isBelovedValue = getGranteeIsBeloved(charityName, ein);
+      key = isBelovedValue ? 'true' : 'false';
     } else {
       key = 'Unknown';
     }
@@ -639,8 +706,22 @@ export function handleAggregateTransactions(
   // Convert to array
   let result = Object.keys(aggregated).map(key => {
     const item = aggregated[key];
+    let fieldName: string;
+    if (groupBy === 'grantee') {
+      fieldName = 'grantee';
+    } else if (groupBy === 'category') {
+      fieldName = 'category';
+    } else if (groupBy === 'year') {
+      fieldName = 'year';
+    } else if (groupBy === 'international') {
+      fieldName = 'international';
+    } else if (groupBy === 'is_beloved') {
+      fieldName = 'is_beloved';
+    } else {
+      fieldName = groupBy;
+    }
     return {
-      [groupBy === 'grantee' ? 'grantee' : groupBy === 'category' ? 'category' : 'year']: key,
+      [fieldName]: key,
       ...(groupBy === 'grantee' && item.name ? { name: item.name } : {}),
       count: item.count,
       total_amount: item.total_amount,

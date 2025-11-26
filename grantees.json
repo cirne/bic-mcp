@@ -95,7 +95,8 @@
     "category": "Evangelism",
     "notes": null,
     "ein": "87-4045476",
-    "international": false
+    "international": false,
+    "is_beloved": true
   },
   "BIBLE PROJECT|46-4277592": {
     "name": "BIBLE PROJECT",
@@ -536,7 +537,8 @@
     "category": "Churches/Offerings",
     "notes": null,
     "ein": "82-5259273",
-    "international": false
+    "international": false,
+    "is_beloved": true
   },
   "New Beginning of Restoration & Hope Mobile Services|82-2743355": {
     "name": "New Beginning of Restoration & Hope Mobile Services",

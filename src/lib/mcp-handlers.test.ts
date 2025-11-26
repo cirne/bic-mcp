@@ -32,6 +32,12 @@ vi.mock('./grantee-metadata', () => ({
     }
     return false;
   }),
+  getGranteeIsBeloved: vi.fn((charity: string, ein: string) => {
+    if (charity === 'Beloved Charity' && ein === '11-1111111') {
+      return true;
+    }
+    return false;
+  }),
 }));
 
 const mockTransactions: Transaction[] = [
@@ -72,10 +78,12 @@ describe('handleListTransactions', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data).toHaveLength(3);
-    // Check that Category and International are included
+    // Check that Category, International, and Is Beloved are included
     expect(data[0]).toHaveProperty('Category');
     expect(data[0]).toHaveProperty('International');
+    expect(data[0]).toHaveProperty('Is Beloved');
     expect(typeof data[0].International).toBe('boolean');
+    expect(typeof data[0]['Is Beloved']).toBe('boolean');
   });
 
   it('should filter by charity', () => {
@@ -184,6 +192,7 @@ describe('handleListTransactions', () => {
     expect(data[0]).toHaveProperty('Amount');
     expect(data[0]).toHaveProperty('Category'); // Category should always be included
     expect(data[0]).toHaveProperty('International'); // International should always be included
+    expect(data[0]).toHaveProperty('Is Beloved'); // Is Beloved should always be included
     expect(data[0]).not.toHaveProperty('Transaction ID');
     expect(data[0]).not.toHaveProperty('Sent Date');
   });
@@ -307,12 +316,14 @@ describe('handleListTransactions', () => {
     expect(data).toHaveLength(0);
   });
 
-  it('should include International field for all transactions', () => {
+  it('should include International and Is Beloved fields for all transactions', () => {
     const result = handleListTransactions(mockTransactions, {});
     const data = JSON.parse(result.content[0].text);
     data.forEach((t: any) => {
       expect(t).toHaveProperty('International');
+      expect(t).toHaveProperty('Is Beloved');
       expect(typeof t.International).toBe('boolean');
+      expect(typeof t['Is Beloved']).toBe('boolean');
     });
   });
 
@@ -336,6 +347,48 @@ describe('handleListTransactions', () => {
     const otherTransaction = data.find((t: any) => t.Charity === 'Test Charity');
     expect(otherTransaction.International).toBe(false);
   });
+
+  it('should filter by is_beloved true', () => {
+    const belovedTransaction: Transaction = {
+      'Transaction ID': '5',
+      'Charity': 'Beloved Charity',
+      'EIN': '11-1111111',
+      'Charity Address': '111 Beloved St',
+      'Amount': '25,000.00',
+      'Sent Date': '12/1/24',
+      'Grant Purpose': 'Beloved grant',
+    };
+    const transactionsWithBeloved = [...mockTransactions, belovedTransaction];
+    const result = handleListTransactions(transactionsWithBeloved, {
+      is_beloved: true,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((t: any) => {
+      expect(t['Is Beloved']).toBe(true);
+    });
+  });
+
+  it('should filter by is_beloved false', () => {
+    const belovedTransaction: Transaction = {
+      'Transaction ID': '5',
+      'Charity': 'Beloved Charity',
+      'EIN': '11-1111111',
+      'Charity Address': '111 Beloved St',
+      'Amount': '25,000.00',
+      'Sent Date': '12/1/24',
+      'Grant Purpose': 'Beloved grant',
+    };
+    const transactionsWithBeloved = [...mockTransactions, belovedTransaction];
+    const result = handleListTransactions(transactionsWithBeloved, {
+      is_beloved: false,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((t: any) => {
+      expect(t['Is Beloved']).toBe(false);
+    });
+  });
 });
 
 describe('handleListGrantees', () => {
@@ -347,10 +400,12 @@ describe('handleListGrantees', () => {
     expect(data[0]).toHaveProperty('name');
     expect(data[0]).toHaveProperty('ein');
     expect(data[0]).toHaveProperty('international');
+    expect(data[0]).toHaveProperty('is_beloved');
     expect(data[0]).toHaveProperty('most_recent_grant_note');
     expect(data[0]).toHaveProperty('total_amount');
     expect(data[0]).toHaveProperty('transaction_count');
     expect(typeof data[0].international).toBe('boolean');
+    expect(typeof data[0].is_beloved).toBe('boolean');
   });
 
   it('should calculate total_amount correctly', () => {
@@ -445,12 +500,56 @@ describe('handleListGrantees', () => {
     expect(data[0]).toHaveProperty('most_recent_grant_note');
   });
 
-  it('should include international field for all grantees', () => {
+  it('should include international and is_beloved fields for all grantees', () => {
     const result = handleListGrantees(mockTransactions, {});
     const data = JSON.parse(result.content[0].text);
     data.forEach((g: any) => {
       expect(g).toHaveProperty('international');
+      expect(g).toHaveProperty('is_beloved');
       expect(typeof g.international).toBe('boolean');
+      expect(typeof g.is_beloved).toBe('boolean');
+    });
+  });
+
+  it('should filter by is_beloved true', () => {
+    const belovedTransaction: Transaction = {
+      'Transaction ID': '5',
+      'Charity': 'Beloved Charity',
+      'EIN': '11-1111111',
+      'Charity Address': '111 Beloved St',
+      'Amount': '25,000.00',
+      'Sent Date': '12/1/24',
+      'Grant Purpose': 'Beloved grant',
+    };
+    const transactionsWithBeloved = [...mockTransactions, belovedTransaction];
+    const result = handleListGrantees(transactionsWithBeloved, {
+      is_beloved: true,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((g: any) => {
+      expect(g.is_beloved).toBe(true);
+    });
+  });
+
+  it('should filter by is_beloved false', () => {
+    const belovedTransaction: Transaction = {
+      'Transaction ID': '5',
+      'Charity': 'Beloved Charity',
+      'EIN': '11-1111111',
+      'Charity Address': '111 Beloved St',
+      'Amount': '25,000.00',
+      'Sent Date': '12/1/24',
+      'Grant Purpose': 'Beloved grant',
+    };
+    const transactionsWithBeloved = [...mockTransactions, belovedTransaction];
+    const result = handleListGrantees(transactionsWithBeloved, {
+      is_beloved: false,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThan(0);
+    data.forEach((g: any) => {
+      expect(g.is_beloved).toBe(false);
     });
   });
 
@@ -558,6 +657,10 @@ describe('handleShowGrantee', () => {
     expect(data.metadata).toHaveProperty('last_grant_year');
     expect(data.metadata).toHaveProperty('category');
     expect(data.metadata).toHaveProperty('notes');
+    expect(data.metadata).toHaveProperty('international');
+    expect(data.metadata).toHaveProperty('is_beloved');
+    expect(typeof data.metadata.international).toBe('boolean');
+    expect(typeof data.metadata.is_beloved).toBe('boolean');
   });
 
   it('should handle empty transactions array', () => {

@@ -1,11 +1,12 @@
 import { Transaction, extractYear, matchesYear, getStringValue } from './filters';
-import { getGranteeInternational } from './grantee-metadata';
+import { getGranteeInternational, getGranteeIsBeloved } from './grantee-metadata';
 
 export interface Grantee {
   name: string;
   ein: string;
   address: string;
   international: boolean;
+  is_beloved: boolean;
   transactions: Transaction[];
 }
 
@@ -99,6 +100,7 @@ export function getAllGrantees(transactions: Transaction[]): Grantee[] {
           ein: ein,
           address: getStringValue(transaction['Charity Address']).trim(),
           international: false, // Will be set in second pass
+          is_beloved: false, // Will be set in second pass
           transactions: []
         },
         transactionRefs: []
@@ -108,7 +110,7 @@ export function getAllGrantees(transactions: Transaction[]): Grantee[] {
     granteeMap.get(key)!.transactionRefs.push(transaction);
   });
   
-  // Second pass: determine international status and assign transactions
+  // Second pass: determine international and is_beloved status and assign transactions
   const grantees: Grantee[] = [];
   granteeMap.forEach(({ grantee, transactionRefs }) => {
     // First try to get from metadata (grantees.json), fallback to analysis function
@@ -125,6 +127,8 @@ export function getAllGrantees(transactions: Transaction[]): Grantee[] {
         transactionRefs
       );
     }
+    // Get is_beloved from metadata (always from metadata, no fallback)
+    grantee.is_beloved = getGranteeIsBeloved(grantee.name, grantee.ein);
     grantee.transactions = transactionRefs;
     grantees.push(grantee);
   });

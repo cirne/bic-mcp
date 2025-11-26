@@ -79,6 +79,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Optional: Filter transactions by grantee category. Valid categories: "Evangelism", "Matthew 25", "Education/Schools", "Churches/Offerings"',
             },
+            is_beloved: {
+              type: 'boolean',
+              description: 'Optional: Filter transactions by is_beloved flag (true for Mountain Metro Church and Beloved in Christ Gallery, false for all others). If not provided, includes all grantees.',
+            },
             sort_by: {
               type: 'string',
               description: 'Optional: Field to sort by (e.g., "Sent Date", "Amount"). Default: no sorting',
@@ -114,6 +118,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             category: {
               type: 'string',
               description: 'Optional: Filter grantees by category. Valid categories: "Evangelism", "Matthew 25", "Education/Schools", "Churches/Offerings"',
+            },
+            is_beloved: {
+              type: 'boolean',
+              description: 'Optional: Filter grantees by is_beloved flag (true for Mountain Metro Church and Beloved in Christ Gallery, false for all others). If not provided, includes all grantees.',
             },
             sort_by: {
               type: 'string',
@@ -155,8 +163,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             group_by: {
               type: 'string',
-              enum: ['category', 'grantee', 'year'],
-              description: 'Required: Field to aggregate by - "category" (Evangelism, Matthew 25, Education/Schools, Churches/Offerings), "grantee" (charity name), or "year"',
+              enum: ['category', 'grantee', 'year', 'international', 'is_beloved'],
+              description: 'Required: Field to aggregate by - "category" (Evangelism, Matthew 25, Education/Schools, Churches/Offerings), "grantee" (charity name), "year", "international" (true/false), or "is_beloved" (true/false)',
             },
             year: {
               type: 'number',
@@ -185,6 +193,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             charity: {
               type: 'string',
               description: 'Optional: Filter by exact charity name when grouping by category or year',
+            },
+            is_beloved: {
+              type: 'boolean',
+              description: 'Optional: Filter transactions by is_beloved flag (true for Mountain Metro Church and Beloved in Christ Gallery, false for all others). If not provided, includes all grantees.',
             },
             sort_by: {
               type: 'string',
