@@ -1,6 +1,10 @@
-# BIC MCP Server
+# BIC Grants MCP Server
 
 An MCP (Model Context Protocol) server for querying and analyzing grant transaction data from the Beloved In Christ Foundation. This server provides tools for searching, filtering, and analyzing grant transactions loaded from CSV files.
+
+**Now available as both:**
+- **Stdio server** for Cursor and other stdio-based MCP clients
+- **HTTP/SSE server** deployable to Vercel for ChatGPT Desktop and other HTTP-based clients
 
 ## Features
 
@@ -9,15 +13,32 @@ An MCP (Model Context Protocol) server for querying and analyzing grant transact
 - **Sorting & Grouping**: Sort by any field and group results by year or other fields
 - **Grantee Management**: List all grantees with aggregated totals and transaction counts
 - **Detailed Grantee Views**: View complete grant history for specific charities with yearly totals
+- **Web UI**: Basic web interface (coming soon with Excel upload capabilities)
 
-## Installation
+## Quick Start
 
-### Prerequisites
+### For Cursor Users (Stdio Server)
 
-- Node.js (v18 or higher recommended)
-- npm or yarn
+1. Install dependencies:
+```bash
+npm install
+```
 
-### Setup
+2. Configure Cursor to use the stdio server:
+   - See [CURSOR_SETUP.md](./docs/CURSOR_SETUP.md) for detailed instructions
+   - Or use the config in `cursor-mcp-config.json`
+
+3. Run the server:
+```bash
+npm run start:stdio
+```
+
+### For ChatGPT Desktop Users (HTTP Server)
+
+1. **Deploy to Vercel**: See [DEPLOY.md](./docs/DEPLOY.md) for deployment instructions
+2. **Configure ChatGPT**: See [CHATGPT_SETUP.md](./docs/CHATGPT_SETUP.md) for setup instructions
+
+### Local Development
 
 1. Clone the repository:
 ```bash
@@ -30,21 +51,47 @@ cd bic-mcp
 npm install
 ```
 
-3. Add your CSV data files to the `data/` directory. The server will automatically load all `.csv` files from this directory.
+3. Add your CSV data files to the `data/` directory
 
-## Usage
-
-### Running the Server
-
-The MCP server runs via stdio and is designed to be used with MCP-compatible clients (like Cursor):
-
+4. Run the development server:
 ```bash
-npm start
+npm run dev
 ```
 
-### Available Tools
+5. Access the web UI at `http://localhost:3000`
+6. Access the MCP API at `http://localhost:3000/api/mcp`
 
-#### 1. `list_transactions`
+## Project Structure
+
+```
+bic-mcp/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── api/mcp/           # MCP HTTP endpoint
+│   │   ├── page.tsx           # Web UI page
+│   │   └── layout.tsx         # Root layout
+│   ├── lib/                   # Shared business logic
+│   │   ├── transactions.ts   # Transaction loading/parsing
+│   │   ├── filters.ts         # Filtering/sorting logic
+│   │   ├── grantees.ts        # Grantee aggregation
+│   │   └── mcp-handlers.ts    # MCP tool handlers
+│   └── styles/
+│       └── globals.css        # Tailwind styles
+├── server/                    # Standalone servers
+│   └── server.js             # Stdio server for Cursor
+├── data/                      # CSV files (add your data here)
+├── public/                     # Static assets
+├── package.json
+├── next.config.js            # Next.js configuration
+├── tailwind.config.js        # Tailwind configuration
+├── tsconfig.json             # TypeScript configuration
+├── vercel.json               # Vercel deployment config
+└── README.md
+```
+
+## Available Tools
+
+### 1. `list_transactions`
 Search and filter grant transactions with advanced options.
 
 **Parameters:**
@@ -60,7 +107,7 @@ Search and filter grant transactions with advanced options.
 - `group_by` (string, optional) - Group results by field (e.g., "year")
 - `fields` (array, optional) - Select specific fields to return
 
-#### 2. `list_grantees`
+### 2. `list_grantees`
 List all unique grantees (charities) with aggregated summary data.
 
 **Parameters:**
@@ -71,7 +118,7 @@ List all unique grantees (charities) with aggregated summary data.
 **Returns:**
 - Name, EIN, most recent grant note, transaction count, and total amount for each grantee
 
-#### 3. `show_grantee`
+### 3. `show_grantee`
 Show detailed information about a specific grantee.
 
 **Parameters:**
@@ -115,29 +162,33 @@ Transactions are loaded from CSV files in the `data/` directory. Key fields incl
 - Amounts are stored as strings with commas and trailing spaces (e.g., "500,000.00 ")
 - The server automatically parses these for filtering and calculations
 
-## Testing
+## Deployment
 
-Run the test suite:
+### Deploying to Vercel
 
-```bash
-npm test
-```
+See [DEPLOY.md](./docs/DEPLOY.md) for detailed deployment instructions.
 
-Run the MCP client test:
+**Quick steps:**
+1. Connect your repository to Vercel
+2. Set `MCP_API_KEY` environment variable
+3. Deploy!
 
-```bash
-npm run test:client
-```
+Your MCP server will be available at `https://your-project.vercel.app/api/mcp`
 
-Run filter tests:
+### Setting Up ChatGPT Desktop
 
-```bash
-npm run test:filter
-```
+See [CHATGPT_SETUP.md](./docs/CHATGPT_SETUP.md) for instructions on connecting ChatGPT Desktop to your deployed server.
 
 ## Configuration
 
-The server automatically loads all CSV files from the `data/` directory on startup. Ensure your CSV files:
+### Environment Variables
+
+- `MCP_API_KEY` - API key for securing the `/api/mcp` endpoint (required for production)
+- `DATA_DIR` - Custom path to data directory (defaults to `./data`)
+
+### CSV File Requirements
+
+The server automatically loads all CSV files from the `data/` directory. Ensure your CSV files:
 
 1. Have a header row containing "Transaction ID"
 2. Use standard CSV format (handles quoted fields with commas)
@@ -145,22 +196,68 @@ The server automatically loads all CSV files from the `data/` directory on start
 
 ## Development
 
-### Project Structure
+### Running Locally
 
+```bash
+# Install dependencies
+npm install
+
+# Run Next.js dev server (includes web UI and HTTP MCP endpoint)
+npm run dev
+
+# Run stdio server (for Cursor)
+npm run start:stdio
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
 ```
-bic-mcp/
-├── server.js          # Main MCP server implementation
-├── data/              # CSV files containing transaction data
-├── test-client.js     # MCP client for testing
-├── test-filter.js     # Filter functionality tests
-├── test.js            # General tests
-└── package.json       # Dependencies and scripts
+
+### Testing
+
+```bash
+# Run test suite (watch mode)
+npm test
+
+# Run test suite once
+npm run test:run
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run manual integration tests
+npm run test:manual
+npm run test:client
+npm run test:filter
 ```
+
+The test suite includes:
+- **Unit tests** for core business logic (filters, transactions, grantees)
+- **Integration tests** for MCP handlers
+- **API tests** for HTTP request handling and authentication
+
+All tests use Vitest and achieve **89% code coverage**.
 
 ### Dependencies
 
 - `@modelcontextprotocol/sdk` - MCP SDK for building the server
 - `fuse.js` - Fuzzy search functionality
+- `next` - Next.js framework for web UI and HTTP server
+- `react` - React for web UI
+- `tailwindcss` - Styling framework
+
+## Future Enhancements
+
+- [ ] Excel file upload via web UI
+- [ ] Enhanced web UI with transaction browsing
+- [ ] Data visualization and charts
+- [ ] Export functionality
+- [ ] User authentication for web UI
 
 ## License
 
@@ -169,4 +266,3 @@ ISC
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
