@@ -1,341 +1,80 @@
 # BIC MCP Server - Project Context
 
 ## Project Overview
-This is an MCP (Model Context Protocol) server for querying and analyzing grant transaction data from the Beloved In Christ Foundation. The server loads transaction data from CSV files and provides tools for searching, filtering, and analyzing grant transactions.
+MCP server for querying grant transaction data from Beloved In Christ Foundation. Loads data from CSV files in `data/` directory.
 
 ---
 
-## PART A: Development & Improvement Guidelines
-
-### Data Structure
-
-#### Transaction Fields
-Transactions are loaded from CSV files in the `data/` directory. Key fields include:
-- `Transaction ID` - Unique transaction identifier
-- `Charity` - Name of the grantee organization
-- `Charity Address` - Address of the grantee
-- `Grant Status` - Status of the grant (e.g., "Payment Cleared")
-- `Amount` - Grant amount (formatted as "500,000.00 " with commas and trailing spaces)
-- `Sent Date` - Date grant was sent (format: M/D/YY, e.g., "10/2/25")
-- `Requested Payment Date` - Requested payment date
-- `Recommendation Submitted Date` - Date recommendation was submitted
-- `Cleared Date` - Date payment cleared
-- `Grant Purpose` - Purpose/description of the grant
-- `Special Note` - Additional notes about the grant
-- `EIN` - Employer Identification Number
-- `Grant Type` - Type of grant (e.g., "Single")
-- `Recommended By` - Who recommended the grant
-
-#### Date Format
-- Dates are stored as strings in format M/D/YY (e.g., "10/2/25" = October 2, 2025)
-- Years 00-30 are interpreted as 2000-2030
-- Years 31-99 are interpreted as 1931-1999
-- Use `extractYear()` helper function to parse dates
-
-#### Amount Format
-- Amounts are stored as strings with commas and trailing spaces (e.g., "500,000.00 ")
-- Always parse amounts by removing commas and spaces: `amountStr.replace(/,/g, '').replace(/\s/g, '')`
-- Then convert to number: `parseFloat(amountStr)`
-
-### Available MCP Tools
-
-#### 1. `list_transactions`
-Search and filter grant transactions with advanced options.
-
-**Parameters:**
-- `search_term` (string, optional) - Fuzzy search across all fields
-- `charity` (string, optional) - Exact charity name match
-- `year` (number, optional) - Exact year filter
-- `min_year` (number, optional) - Filter from this year onwards
-- `max_year` (number, optional) - Filter up to this year
-- `min_amount` (number, optional) - Minimum grant amount
-- `max_amount` (number, optional) - Maximum grant amount
-- `sort_by` (string, optional) - Field to sort by (e.g., "Sent Date", "Amount")
-- `sort_order` (string, optional) - "asc" or "desc"
-- `group_by` (string, optional) - Group results by field (e.g., "year")
-- `fields` (array, optional) - Select specific fields to return
-
-#### 2. `list_grantees`
-List all unique grantees (charities) with aggregated summary data including total amount and transaction count. **This is the preferred tool for "top grantees" queries** - it provides pre-calculated totals and supports sorting by total amount without needing post-processing.
-
-**Parameters:**
-- `year` (number, optional) - Filter to only grantees that received grants in this year (e.g., 2024). If provided, transaction count and total amount will be scoped to this year only.
-- `sort_by` (string, optional) - Sort by "name", "ein", "recent_date", or "total_amount" (default: "name")
-- `sort_order` (string, optional) - "asc" or "desc" (default: "asc")
-
-**Returns:**
-- Name, EIN, most recent grant note, transaction count, and **total_amount** for each grantee
-
-#### 3. `show_grantee`
-Show detailed information about a specific grantee.
-
-**Parameters:**
-- `charity` (string, required) - Exact charity name
-
-**Returns:**
-- Grantee metadata (name, EIN, address)
-- Yearly totals (count and total amount per year)
-- All transaction history sorted by date
-
-### Code Patterns
-
-#### Helper Functions
-- `extractYear(dateStr)` - Extract year from date string (returns number or null)
-- `matchesYearRange(transaction, minYear, maxYear)` - Check if transaction matches year range
-- `matchesCharity(transaction, charity)` - Check exact charity name match
-- `matchesAmountRange(transaction, minAmount, maxAmount)` - Check if amount is in range
-- `getAllGrantees()` - Get all unique grantees with their transactions
-- `getMostRecentGrantNote(transactions)` - Get most recent grant note from transactions
-
-#### Data Loading
-- Transactions are loaded from all CSV files in `data/` directory
-- CSV parsing handles quoted fields and commas within quotes
-- Header row is identified by presence of "Transaction ID"
-- Empty rows and rows without Transaction ID are skipped
-
-#### Error Handling
-- Always validate input parameters (type, range, required fields)
-- Return errors in format: `{ content: [{ type: 'text', text: 'Error message' }], isError: true }`
-- Return successful results as JSON: `{ content: [{ type: 'text', text: JSON.stringify(result) }] }`
-
-### Improvement Guidelines
-
-When improving the MCP server:
-1. **Add new filters/parameters** to `list_transactions` when common query patterns emerge
-2. **Use exact matching** (`charity` parameter) instead of fuzzy search when precision is needed
-3. **Support date ranges** with `min_year`/`max_year` rather than just exact year matching
-4. **Add grouping/sorting** capabilities to reduce post-processing in queries
-5. **Return only needed fields** using `fields` parameter to reduce response size
-6. **Validate inputs** thoroughly - check types, ranges, and required fields
-7. **Maintain backward compatibility** - make new parameters optional
-8. **Consider common use cases** - if users frequently need to filter/group/sort in specific ways, add those capabilities
-
-### Important Implementation Notes
-
-1. **Fuzzy Search**: Uses Fuse.js with threshold 0.4 for fuzzy matching across all fields
-2. **Year Matching**: Dates ending with "/YY" are matched to the corresponding year (e.g., "/24" = 2024)
-3. **Amount Parsing**: Always handle commas and trailing spaces when parsing amounts
-4. **Grantee Uniqueness**: Grantees are identified by combination of Charity name + EIN
-5. **Date Fields**: Multiple date fields exist - use "Sent Date" as primary for most queries
-6. **Most Recent Note**: For `list_grantees`, uses "Grant Purpose" or "Special Note" fields, preferring non-empty values
-
-### File Structure
-- `server.js` - Main MCP server implementation
-- `data/` - CSV files containing transaction data
-- `test-client.js` - Test client for MCP server
-- `package.json` - Dependencies: @modelcontextprotocol/sdk, fuse.js
-
----
-
-## PART B: Using the MCP Server to Answer Grant Questions
-
-### Primary Use Case
-**You are an AI assistant helping answer questions about Beloved In Christ Foundation grant transactions.** Use the MCP server tools to query grant data and provide clear, accurate answers.
+## PART A: Using the MCP Server
 
 ### Query Strategy
 
-#### 0. Top Grantees / Largest Recipients Queries
-**CRITICAL:** For questions like "top grantees", "largest recipients", "who received the most", etc., **ALWAYS use `list_grantees`** - NEVER use `list_transactions` with post-processing code.
+**Top Grantees:** Always use `list_grantees` with `sort_by: "total_amount"` - never use `list_transactions` with post-processing.
 
-```javascript
-// ✅ CORRECT: Use list_grantees for top grantees queries
-list_grantees({
-  year: 2024,
-  sort_by: "total_amount",
-  sort_order: "desc"
-})
+**Finding Charity Names:** Use `list_grantees({ sort_by: "name" })` first, then use exact `charity` parameter (not `search_term`).
 
-// ❌ WRONG: Don't use list_transactions + post-processing
-// list_transactions({ year: 2024, group_by: "Charity" }) + manual calculation
-```
+**Common Patterns:**
+- Charity since year: `list_transactions({ charity: "Name", min_year: 2023, sort_by: "Sent Date", sort_order: "desc" })`
+- Yearly summary: `show_grantee({ charity: "Name" })` (returns yearly totals automatically)
+- Large grants: `list_transactions({ year: 2024, min_amount: 25000, sort_by: "Amount", sort_order: "desc" })`
+- Top grantees: `list_grantees({ year: 2024, sort_by: "total_amount", sort_order: "desc" })`
 
-**Why:** `list_grantees` already calculates `total_amount` and `transaction_count` for each grantee, supports year filtering, and can sort by total amount. Using `list_transactions` with post-processing is unnecessary and inefficient.
+### Response Formatting
+- Format amounts: "$500,000" not "500000.00"
+- Format dates: "October 2, 2025" not "10/2/25"
+- Include totals (count, sum) when showing multiple transactions
+- Group multi-year data by year
+- Include Sent Date, Amount, Grant Purpose in responses
 
-#### 1. Finding Transactions for a Specific Charity
-**Use:** `list_transactions` with `charity` parameter (exact match, not fuzzy search)
-```javascript
-// Good: Exact charity name match
-{ charity: "Young Life", min_year: 2023 }
+### Special Grantee Relationships
 
-// Avoid: Fuzzy search returns too many false positives
-{ search_term: "Young Life" }
-```
+When asked about these organizations, **include grants to related entities**:
 
-**Best Practice:** First use `list_grantees` to find exact charity names, then use `charity` parameter for precise filtering.
+#### FRISBE → Trinity College School (TCS)
+- **FRISBE** (EIN: 91-1216755) is a U.S. conduit for **Trinity College School** in Canada
+- Include grants to both "Trinity College School Fund Inc." (EIN: 13-6187951) and "Friends of Independent Schools and Better Education (FRISBE)"
+- Clarify that FRISBE grants go to Trinity College School Foundation
 
-#### 2. Filtering by Date Range
-**Use:** `min_year` and `max_year` for date ranges
-```javascript
-// "Since 2023" = transactions from 2023 onwards
-{ min_year: 2023 }
+#### Latin American Fellowship → Los Cabos Programs
+- **Latin American Fellowship INC** (EIN: 93-6033108, Albany, OR) is a conduit for **Los Cabos special programs** in Baja California Sur, Mexico
+- Supports ministries, food banks, and community programs in Los Cabos/BCS region
+- Clarify that grants are for Los Cabos programs
 
-// "Between 2023 and 2024"
-{ min_year: 2023, max_year: 2024 }
-
-// "In 2024"
-{ year: 2024 }
-// OR
-{ min_year: 2024, max_year: 2024 }
-```
-
-#### 3. Filtering by Amount
-**Use:** `min_amount` and `max_amount` for amount ranges
-```javascript
-// "Above $25,000"
-{ min_amount: 25000 }
-
-// "Between $10,000 and $50,000"
-{ min_amount: 10000, max_amount: 50000 }
-```
-
-#### 4. Grouping and Summarizing
-**Use:** `group_by: "year"` to group transactions by year
-```javascript
-// Group transactions by year
-{ charity: "Young Life", min_year: 2023, group_by: "year" }
-```
-
-**For yearly totals:** Use `show_grantee` which automatically provides yearly totals.
-
-#### 5. Selecting Specific Fields
-**Use:** `fields` parameter to return only needed data
-```javascript
-// Only return date, amount, and grant purpose
-{ charity: "Young Life", fields: ["Sent Date", "Amount", "Grant Purpose"] }
-```
-
-### Common Query Patterns
-
-#### Pattern 1: "List all transactions to [Charity] since [Year]"
-```javascript
-list_transactions({
-  charity: "[Exact Charity Name]",
-  min_year: [Year],
-  sort_by: "Sent Date",
-  sort_order: "desc"
-})
-```
-
-#### Pattern 2: "Show grantee details and history"
-```javascript
-show_grantee({
-  charity: "[Exact Charity Name]"
-})
-// Returns: metadata, yearly totals, and all transactions
-```
-
-#### Pattern 3: "Find all grants above $X in [Year]"
-```javascript
-list_transactions({
-  year: [Year],
-  min_amount: [Amount],
-  sort_by: "Amount",
-  sort_order: "desc"
-})
-```
-
-#### Pattern 4: "List all grantees"
-```javascript
-list_grantees({
-  sort_by: "name"  // or "recent_date" to see most active first
-})
-```
-
-#### Pattern 5: "Top grantees in [Year]" or "Who were our top grantees?"
-**Use:** `list_grantees` with `year` filter and `total_amount` sorting - **DO NOT use `list_transactions` with post-processing**
-```javascript
-// Top grantees in 2024
-list_grantees({
-  year: 2024,
-  sort_by: "total_amount",
-  sort_order: "desc"
-})
-// Returns: All grantees with pre-calculated total_amount, already sorted
-// No post-processing needed!
-```
-
-### Response Formatting Guidelines
-
-When answering grant questions:
-
-1. **Be Clear and Concise**: Present information in a readable format
-2. **Include Totals**: When showing multiple transactions, include totals (count, sum)
-3. **Group by Year**: When showing multi-year data, group by year for clarity
-4. **Show Key Fields**: Include Sent Date, Amount, and Grant Purpose/Note in responses
-5. **Format Amounts**: Display amounts in readable format (e.g., "$500,000" not "500000.00")
-6. **Format Dates**: Convert date strings to readable format (e.g., "October 2, 2025" not "10/2/25")
-7. **Provide Context**: Include grantee name, EIN, and other relevant metadata when helpful
-
-### Example Response Format
-
-**Good Response:**
-```
-## Young Life Grants Since 2023
-
-**Total:** 12 grants, $2,385,000
-
-### 2025
-- **October 2, 2025** - $500,000 - General support for operations
-- **September 15, 2025** - $250,000 - Support for LAC University programs
-
-### 2024
-- **November 20, 2024** - $400,000 - Support for WestLake Young Life
-...
-```
-
-**Avoid:** Raw JSON dumps or unformatted data
-
-### Error Handling
-
-If a query fails:
-1. Check if charity name is exact (use `list_grantees` to find correct name)
-2. Verify date ranges are valid (years between 1900-2100)
-3. Check amount values are positive numbers
-4. Provide helpful error messages suggesting corrections
-
-### Tips for Better Queries
-
-1. **Start Broad, Then Narrow**: Use `list_grantees` first to find exact charity names
-2. **Use Exact Matching**: Prefer `charity` parameter over `search_term` for precision
-3. **Combine Filters**: Use multiple filters together (charity + year + amount) for precise results
-4. **Use Grouping**: When showing multi-year data, use `group_by: "year"` or `show_grantee` for automatic grouping
-5. **Select Fields**: Use `fields` parameter to reduce response size and focus on relevant data
-6. **Sort Results**: Always sort by date or amount for readability
+#### Freedom Generation Church → Dean Braxton Ministries
+- **Freedom Generation Church** (EIN: 75-3094503) fiscally sponsors **Dean Braxton Ministries**
+- Many grants explicitly state "Donation for Dean Braxton Ministries" in grant purpose
+- Clarify that grants support Dean Braxton Ministries
 
 ### When to Use Each Tool
-
-- **`list_transactions`**: When you need to search/filter individual transactions with specific criteria (amounts, dates, grant purposes, etc.)
-- **`list_grantees`**: When you need aggregated grantee data, especially for "top grantees" queries. **Always use this for questions about largest recipients, top grantees, or grantee rankings** - it provides pre-calculated totals and supports sorting by total amount without post-processing.
-- **`show_grantee`**: When you need complete grantee history with yearly totals for a specific charity
+- **`list_transactions`**: Search/filter individual transactions (amounts, dates, purposes)
+- **`list_grantees`**: Aggregated grantee data, especially top grantees queries
+- **`show_grantee`**: Complete grantee history with yearly totals
 
 ---
 
-## Quick Reference
+## PART B: Development Guidelines
 
-### Finding Exact Charity Names
-```javascript
-list_grantees({ sort_by: "name" })
-```
+### Data Structure
+- **Dates**: Format M/D/YY (e.g., "10/2/25" = October 2, 2025). Years 00-30 = 2000-2030, 31-99 = 1931-1999
+- **Amounts**: Strings with commas and trailing spaces (e.g., "500,000.00 "). Parse: `amountStr.replace(/,/g, '').replace(/\s/g, '')` then `parseFloat()`
+- **Key Fields**: Transaction ID, Charity, Amount, Sent Date, Grant Purpose, EIN, Grant Status
 
-### Charity Transactions Since Year X
-```javascript
-list_transactions({ charity: "[Name]", min_year: X, sort_by: "Sent Date" })
-```
+### MCP Tools
 
-### Yearly Summary for Charity
-```javascript
-show_grantee({ charity: "[Name]" })
-// Returns yearly totals automatically
-```
+#### `list_transactions` - Search/filter transactions
+**Parameters:** `search_term`, `charity` (exact match), `year`/`min_year`/`max_year`, `min_amount`/`max_amount`, `sort_by`, `sort_order`, `group_by`, `fields`
 
-### Large Grants in Year
-```javascript
-list_transactions({ year: X, min_amount: 25000, sort_by: "Amount", sort_order: "desc" })
-```
+#### `list_grantees` - List grantees with aggregated totals
+**Parameters:** `year`, `sort_by` ("name", "ein", "recent_date", "total_amount"), `sort_order`
+**Returns:** Name, EIN, transaction count, total_amount, most recent grant note
+**Use for:** Top grantees queries - provides pre-calculated totals, no post-processing needed
 
-### Top Grantees in Year
-```javascript
-list_grantees({ year: X, sort_by: "total_amount", sort_order: "desc" })
-// Returns grantees sorted by total grant amount for that year
-// Includes transaction_count and total_amount - no post-processing needed!
-```
+#### `show_grantee` - Detailed grantee info
+**Parameters:** `charity` (required, exact name)
+**Returns:** Metadata, yearly totals, all transactions
+
+### Implementation Notes
+- Fuzzy search uses Fuse.js (threshold 0.4)
+- Grantees identified by Charity name + EIN
+- Use "Sent Date" as primary date field
+- Validate all inputs (type, range, required fields)
