@@ -7,6 +7,34 @@ import {
   handleAggregateTransactions,
 } from '@/lib/mcp-handlers';
 import { MCP_TOOLS } from '@/lib/mcp-tools';
+import type { Transaction } from '@/lib/filters';
+import type { MCPToolResult } from '@/lib/mcp-handlers';
+
+// Map tool names to their handler functions - single source of truth derived from MCP_TOOLS
+type ToolHandler = (transactions: Transaction[], args: any) => MCPToolResult;
+const TOOL_HANDLERS: Record<string, ToolHandler> = {
+  list_transactions: handleListTransactions,
+  list_grantees: handleListGrantees,
+  show_grantee: handleShowGrantee,
+  aggregate_transactions: handleAggregateTransactions,
+};
+
+// Get list of available tool names from MCP_TOOLS (single source of truth)
+export function getAvailableToolNames(): string[] {
+  return MCP_TOOLS.map(tool => tool.name);
+}
+
+// Validate that all tools in MCP_TOOLS have handlers
+function validateToolHandlers() {
+  const toolNames = getAvailableToolNames();
+  const missingHandlers = toolNames.filter(name => !TOOL_HANDLERS[name]);
+  if (missingHandlers.length > 0) {
+    throw new Error(`Missing handlers for tools: ${missingHandlers.join(', ')}`);
+  }
+}
+
+// Validate on module load
+validateToolHandlers();
 
 // Cache transactions in memory (Vercel serverless functions are stateless)
 let cachedTransactions: ReturnType<typeof loadTransactions> | null = null;
@@ -129,32 +157,23 @@ export async function handleMCPPost(request: NextRequest) {
 
         const transactions = getTransactions();
         
+        // Get handler from map (single source of truth)
+        const handler = TOOL_HANDLERS[toolName];
+        if (!handler) {
+          console.error('[MCP] ERROR: Unknown tool requested:', toolName);
+          return NextResponse.json({
+            jsonrpc: '2.0',
+            id: body.id !== undefined ? body.id : null,
+            error: {
+              code: -32601,
+              message: `Unknown tool: ${toolName}. Available: ${getAvailableToolNames().join(', ')}`,
+            },
+          });
+        }
+        
         let result;
         try {
-          switch (toolName) {
-            case 'list_transactions':
-              result = handleListTransactions(transactions, toolArguments);
-              break;
-            case 'list_grantees':
-              result = handleListGrantees(transactions, toolArguments);
-              break;
-            case 'show_grantee':
-              result = handleShowGrantee(transactions, toolArguments);
-              break;
-            case 'aggregate_transactions':
-              result = handleAggregateTransactions(transactions, toolArguments);
-              break;
-            default:
-              console.error('[MCP] ERROR: Unknown tool requested:', toolName);
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id: body.id !== undefined ? body.id : null,
-                error: {
-                  code: -32601,
-                  message: `Unknown tool: ${toolName}`,
-                },
-              });
-          }
+          result = handler(transactions, toolArguments);
           
           return NextResponse.json({
             jsonrpc: '2.0',
@@ -197,25 +216,19 @@ export async function handleMCPPost(request: NextRequest) {
 
     const transactions = getTransactions();
     
+    // Get handler from map (single source of truth)
+    const handler = TOOL_HANDLERS[toolName];
+    if (!handler) {
+      console.error('[MCP] ERROR: Unknown tool requested:', toolName);
+      return NextResponse.json(
+        { error: `Unknown tool: ${toolName}`, available: getAvailableToolNames() },
+        { status: 400 }
+      );
+    }
+    
     let result;
     try {
-      switch (toolName) {
-        case 'list_transactions':
-          result = handleListTransactions(transactions, params || {});
-          break;
-        case 'list_grantees':
-          result = handleListGrantees(transactions, params || {});
-          break;
-        case 'show_grantee':
-          result = handleShowGrantee(transactions, params || {});
-          break;
-        default:
-          console.error('[MCP] ERROR: Unknown tool requested:', toolName);
-        return NextResponse.json(
-          { error: `Unknown tool: ${toolName}`, available: ['list_transactions', 'list_grantees', 'show_grantee'] },
-          { status: 400 }
-        );
-    }
+      result = handler(transactions, params || {});
 
       return NextResponse.json(result);
     } catch (error) {

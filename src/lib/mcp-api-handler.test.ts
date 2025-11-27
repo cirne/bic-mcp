@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { validateApiKey, handleMCPGet, handleMCPPost, TOOLS } from './mcp-api-handler';
+import { validateApiKey, handleMCPGet, handleMCPPost, TOOLS, getAvailableToolNames } from './mcp-api-handler';
+import { MCP_TOOLS } from './mcp-tools';
 import type { Transaction } from './filters';
 
 // Mock the handlers and transactions loader
@@ -8,13 +9,14 @@ vi.mock('./mcp-handlers', () => ({
   handleListTransactions: vi.fn(),
   handleListGrantees: vi.fn(),
   handleShowGrantee: vi.fn(),
+  handleAggregateTransactions: vi.fn(),
 }));
 
 vi.mock('./transactions', () => ({
   loadTransactions: vi.fn(),
 }));
 
-import { handleListTransactions, handleListGrantees, handleShowGrantee } from './mcp-handlers';
+import { handleListTransactions, handleListGrantees, handleShowGrantee, handleAggregateTransactions } from './mcp-handlers';
 import { loadTransactions } from './transactions';
 
 // Suppress console.error during tests to reduce noise from expected error logs
@@ -435,7 +437,30 @@ describe('handleMCPPost', () => {
 
       expect(response.status).toBe(400);
       expect(data.error).toContain('Unknown tool');
-      expect(data.available).toEqual(['list_transactions', 'list_grantees', 'show_grantee']);
+      // Use the actual available tools from MCP_TOOLS (single source of truth)
+      expect(data.available).toEqual(expect.arrayContaining(['list_transactions', 'list_grantees', 'show_grantee', 'aggregate_transactions']));
+      expect(data.available.length).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  describe('Tool Handler Validation', () => {
+    it('should have handlers for all tools defined in MCP_TOOLS', () => {
+      // This test ensures we catch missing handlers at test time
+      const availableTools = getAvailableToolNames();
+      expect(availableTools.length).toBeGreaterThan(0);
+      expect(availableTools).toContain('list_transactions');
+      expect(availableTools).toContain('list_grantees');
+      expect(availableTools).toContain('show_grantee');
+      expect(availableTools).toContain('aggregate_transactions');
+      
+      // Verify all tools in MCP_TOOLS are callable (handled by validateToolHandlers on module load)
+      // If this test passes, it means validateToolHandlers() didn't throw
+      expect(MCP_TOOLS.length).toBe(availableTools.length);
+    });
+
+    it('should return correct list of available tool names', () => {
+      const toolNames = getAvailableToolNames();
+      expect(toolNames).toEqual(MCP_TOOLS.map(tool => tool.name));
     });
 
     it('should handle error from handler execution in simple format', async () => {
@@ -543,6 +568,28 @@ describe('handleMCPPost', () => {
 
       await handleMCPPost(request);
       expect(handleShowGrantee).toHaveBeenCalledWith(mockTransactions, { charity: 'Test' });
+    });
+  });
+
+  describe('Tool Handler Validation', () => {
+    it('should have handlers for all tools defined in MCP_TOOLS', () => {
+      // This test ensures we catch missing handlers at test time
+      // The validateToolHandlers() function runs on module load and will throw if handlers are missing
+      // If this test passes, it means validateToolHandlers() didn't throw
+      const availableTools = getAvailableToolNames();
+      expect(availableTools.length).toBeGreaterThan(0);
+      expect(availableTools).toContain('list_transactions');
+      expect(availableTools).toContain('list_grantees');
+      expect(availableTools).toContain('show_grantee');
+      expect(availableTools).toContain('aggregate_transactions');
+      
+      // Verify all tools in MCP_TOOLS are callable
+      expect(MCP_TOOLS.length).toBe(availableTools.length);
+    });
+
+    it('should return correct list of available tool names', () => {
+      const toolNames = getAvailableToolNames();
+      expect(toolNames).toEqual(MCP_TOOLS.map(tool => tool.name));
     });
   });
 });
