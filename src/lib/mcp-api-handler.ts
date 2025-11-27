@@ -264,41 +264,77 @@ export async function handleMCPPost(request: NextRequest) {
         }
 
         // Load transactions
+        console.log('[MCP] Loading transactions for tool:', toolName);
         const transactionsResult = loadTransactionsSafely();
         if ('error' in transactionsResult) {
+          console.error('[MCP] ERROR loading transactions:', transactionsResult.error);
           return createJsonRpcError(body.id, -32603, transactionsResult.error);
         }
         const { transactions } = transactionsResult;
+        console.log('[MCP] Loaded', transactions.length, 'transactions for tool:', toolName);
         
         // Execute tool
+        console.log('[MCP] Executing tool:', toolName);
         const executionResult = executeTool(toolName, transactions, toolArguments);
         if ('error' in executionResult) {
+          console.error('[MCP] ERROR executing tool:', toolName, executionResult.error);
           // Use appropriate error code based on error type
           const isUnknownTool = executionResult.error.includes('Unknown tool');
           const errorCode = isUnknownTool ? -32601 : -32603;
           return createJsonRpcError(body.id, errorCode, executionResult.error);
         }
+        console.log('[MCP] Tool execution successful:', toolName, {
+          hasContent: !!executionResult.content,
+          contentLength: executionResult.content?.length,
+          firstContentType: executionResult.content?.[0]?.type,
+          firstContentTextLength: executionResult.content?.[0]?.text?.length,
+        });
         
         try {
           // Verify the result structure is valid
           if (!executionResult || !executionResult.content || !Array.isArray(executionResult.content)) {
-            console.error('[MCP] ERROR: Invalid result structure:', executionResult);
+            console.error('[MCP] ERROR: Invalid result structure:', {
+              hasExecutionResult: !!executionResult,
+              hasContent: !!executionResult?.content,
+              isArray: Array.isArray(executionResult?.content),
+              executionResult,
+            });
             return createJsonRpcError(body.id, -32603, 'Invalid result structure from tool handler');
           }
           
           // Format result (handles structuredContent when outputSchema exists)
+          console.log('[MCP] Formatting result for tool:', toolName);
           const mcpResult = formatMCPResult(toolName, executionResult);
           const hasStructuredContent = 'structuredContent' in mcpResult;
           
-          console.log('[MCP] tools/call success:', { 
-            toolName, 
-            format: hasStructuredContent ? 'structuredContent' : 'content',
-            preview: hasStructuredContent 
-              ? JSON.stringify(mcpResult.structuredContent).substring(0, 200)
-              : mcpResult.content[0]?.text?.substring(0, 200)
-          });
+          // Safe preview generation (handle large arrays/objects)
+          let preview: string;
+          try {
+            if (hasStructuredContent) {
+              const structuredStr = JSON.stringify(mcpResult.structuredContent);
+              preview = structuredStr.length > 200 ? structuredStr.substring(0, 200) + '...' : structuredStr;
+              console.log('[MCP] tools/call success:', { 
+                toolName, 
+                format: 'structuredContent',
+                structuredDataType: Array.isArray(mcpResult.structuredContent) ? 'array' : typeof mcpResult.structuredContent,
+                structuredDataLength: Array.isArray(mcpResult.structuredContent) ? mcpResult.structuredContent.length : 'N/A',
+                preview,
+              });
+            } else {
+              preview = mcpResult.content[0]?.text?.substring(0, 200) || '(no preview)';
+              console.log('[MCP] tools/call success:', { 
+                toolName, 
+                format: 'content',
+                preview,
+              });
+            }
+          } catch (previewError) {
+            console.warn('[MCP] WARNING: Could not generate preview:', previewError);
+            preview = '(preview generation failed)';
+          }
           
           // Validate serialization and log response size
+          console.log('[MCP] Validating serialization for tool:', toolName);
           try {
             const testResponse = {
               jsonrpc: '2.0' as const,
@@ -307,19 +343,20 @@ export async function handleMCPPost(request: NextRequest) {
             };
             const serialized = JSON.stringify(testResponse);
             const responseSizeKB = Math.round(serialized.length / 1024);
-            console.log('[MCP] Response serialization validated, size:', responseSizeKB, 'KB');
+            console.log('[MCP] Response serialization validated, size:', responseSizeKB, 'KB', 'for tool:', toolName);
             
             if (responseSizeKB > 1000) {
-              console.warn('[MCP] WARNING: Large response size:', responseSizeKB, 'KB');
+              console.warn('[MCP] WARNING: Large response size:', responseSizeKB, 'KB', 'for tool:', toolName);
             }
           } catch (serialError) {
-            console.error('[MCP] ERROR: Result cannot be serialized:', serialError);
+            console.error('[MCP] ERROR: Result cannot be serialized for tool:', toolName, serialError);
             return createJsonRpcError(body.id, -32603, `Result serialization error: ${serialError instanceof Error ? serialError.message : String(serialError)}`);
           }
           
+          console.log('[MCP] Returning success response for tool:', toolName);
           return createJsonRpcSuccess(body.id, mcpResult);
         } catch (error) {
-          console.error('[MCP] ERROR creating response:', toolName, error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
+          console.error('[MCP] ERROR creating response for tool:', toolName, error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
           return createJsonRpcError(body.id, -32603, `Error creating response: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
