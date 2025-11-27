@@ -263,13 +263,17 @@ export async function handleMCPPost(request: NextRequest) {
       }
 
       if (method === 'tools/list') {
-        return NextResponse.json({
+        console.log('[MCP] tools/list request received');
+        console.log('[MCP] Returning', MCP_TOOLS.length, 'tools:', MCP_TOOLS.map(t => t.name).join(', '));
+        const response = {
           jsonrpc: '2.0',
           id: body.id !== undefined ? body.id : null,
           result: {
             tools: MCP_TOOLS,
           },
-        });
+        };
+        console.log('[MCP] tools/list response size:', JSON.stringify(response).length, 'bytes');
+        return NextResponse.json(response);
       }
 
       if (method === 'tools/call') {
