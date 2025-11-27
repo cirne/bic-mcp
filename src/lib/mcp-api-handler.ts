@@ -224,8 +224,47 @@ export async function handleMCPPost(request: NextRequest) {
           return createJsonRpcError(body.id, errorCode, executionResult.error);
         }
         
-        console.log('[MCP] tools/call success:', { toolName, resultType: typeof executionResult, hasContent: !!executionResult.content, contentLength: executionResult.content?.length });
-        return createJsonRpcSuccess(body.id, executionResult);
+        try {
+          console.log('[MCP] tools/call success:', { 
+            toolName, 
+            resultType: typeof executionResult, 
+            hasContent: !!executionResult.content, 
+            contentLength: executionResult.content?.length,
+            contentPreview: executionResult.content?.[0]?.text?.substring(0, 200)
+          });
+          
+          // Verify the result structure is valid
+          if (!executionResult || !executionResult.content || !Array.isArray(executionResult.content)) {
+            console.error('[MCP] ERROR: Invalid result structure:', executionResult);
+            return createJsonRpcError(body.id, -32603, 'Invalid result structure from tool handler');
+          }
+          
+          const response = createJsonRpcSuccess(body.id, executionResult);
+          
+          // Try to serialize to catch any JSON errors and log response size
+          try {
+            const fullResponse = {
+              jsonrpc: '2.0',
+              id: body.id !== undefined ? body.id : null,
+              result: executionResult,
+            };
+            const testSerialization = JSON.stringify(fullResponse);
+            const responseSizeKB = Math.round(testSerialization.length / 1024);
+            console.log('[MCP] Result serialization test passed, response size:', responseSizeKB, 'KB');
+            
+            if (responseSizeKB > 1000) {
+              console.warn('[MCP] WARNING: Large response size may cause issues:', responseSizeKB, 'KB');
+            }
+          } catch (serialError) {
+            console.error('[MCP] ERROR: Result cannot be serialized:', serialError);
+            return createJsonRpcError(body.id, -32603, `Result serialization error: ${serialError instanceof Error ? serialError.message : String(serialError)}`);
+          }
+          
+          return response;
+        } catch (error) {
+          console.error('[MCP] ERROR creating response:', toolName, error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
+          return createJsonRpcError(body.id, -32603, `Error creating response: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
 
       // Unknown MCP method
