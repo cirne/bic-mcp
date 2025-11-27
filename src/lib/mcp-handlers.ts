@@ -486,14 +486,22 @@ export function handleShowGrantee(
     };
   }
 
-  // Calculate totals and statistics
-  const totalAmount = grantee.transactions.reduce((sum, t) => {
+  // Separate cleared and non-cleared transactions
+  const clearedTransactions = grantee.transactions.filter(
+    t => getStringValue(t['Grant Status']) === 'Payment Cleared'
+  );
+  const nonClearedTransactions = grantee.transactions.filter(
+    t => getStringValue(t['Grant Status']) !== 'Payment Cleared'
+  );
+
+  // Calculate totals and statistics (only from cleared transactions)
+  const totalAmount = clearedTransactions.reduce((sum, t) => {
     const amountStr = getStringValue(t.Amount).replace(/,/g, '').replace(/\s/g, '');
     return sum + (parseFloat(amountStr) || 0);
   }, 0);
 
-  // Get date range
-  const dates = (grantee.transactions
+  // Get date range from cleared transactions
+  const dates = (clearedTransactions
     .map(t => extractYear(getStringValue(t['Sent Date'])))
     .filter(d => d !== null) as number[])
     .sort((a, b) => a - b);
@@ -501,9 +509,9 @@ export function handleShowGrantee(
   const firstGrantYear = dates.length > 0 ? dates[0] : null;
   const lastGrantYear = dates.length > 0 ? dates[dates.length - 1] : null;
 
-  // Calculate yearly totals
+  // Calculate yearly totals (only from cleared transactions)
   const yearlyTotals: Record<number, { year: number; count: number; total_amount: number }> = {};
-  grantee.transactions.forEach(transaction => {
+  clearedTransactions.forEach(transaction => {
     const year = extractYear(getStringValue(transaction['Sent Date']));
     if (year) {
       if (!yearlyTotals[year]) {
@@ -521,6 +529,29 @@ export function handleShowGrantee(
 
   // Convert to array and sort by year (most recent first)
   const yearlyTotalsArray = Object.values(yearlyTotals).sort((a, b) => b.year - a.year);
+
+  // Calculate status breakdown
+  const statusBreakdown: Record<string, { count: number; total_amount: number }> = {};
+  grantee.transactions.forEach(transaction => {
+    const status = getStringValue(transaction['Grant Status']) || '(no status)';
+    if (!statusBreakdown[status]) {
+      statusBreakdown[status] = {
+        count: 0,
+        total_amount: 0,
+      };
+    }
+    statusBreakdown[status].count += 1;
+    const amountStr = getStringValue(transaction.Amount).replace(/,/g, '').replace(/\s/g, '');
+    statusBreakdown[status].total_amount += parseFloat(amountStr) || 0;
+  });
+
+  // Convert status breakdown to array, sorted by status name
+  const statusBreakdownArray = Object.entries(statusBreakdown)
+    .map(([status, data]) => ({
+      status,
+      ...data,
+    }))
+    .sort((a, b) => a.status.localeCompare(b.status));
 
   // Sort transactions by date (most recent first)
   const sortedTransactions = [...grantee.transactions].sort((a, b) => {
@@ -545,12 +576,15 @@ export function handleShowGrantee(
       international: grantee.international,
       is_beloved: grantee.is_beloved,
       total_grants: grantee.transactions.length,
-      total_amount: totalAmount,
+      cleared_grants: clearedTransactions.length,
+      non_cleared_grants: nonClearedTransactions.length,
+      total_amount: totalAmount, // Only cleared transactions
       first_grant_year: firstGrantYear,
       last_grant_year: lastGrantYear,
     },
-    yearly_totals: yearlyTotalsArray,
-    transactions: sortedTransactions,
+    status_breakdown: statusBreakdownArray,
+    yearly_totals: yearlyTotalsArray, // Only cleared transactions
+    transactions: sortedTransactions, // All transactions (cleared and non-cleared)
   };
 
   return {

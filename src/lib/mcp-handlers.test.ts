@@ -50,6 +50,7 @@ const mockTransactions: Transaction[] = [
     'Sent Date': '10/2/24',
     'Grant Purpose': 'Test grant purpose',
     'Special Note': 'Test note',
+    'Grant Status': 'Payment Cleared',
   },
   {
     'Transaction ID': '2',
@@ -60,6 +61,7 @@ const mockTransactions: Transaction[] = [
     'Sent Date': '11/15/24',
     'Grant Purpose': 'Another grant purpose',
     'Special Note': 'Another note',
+    'Grant Status': 'Payment Cleared',
   },
   {
     'Transaction ID': '3',
@@ -69,6 +71,7 @@ const mockTransactions: Transaction[] = [
     'Amount': '15,000.00',
     'Sent Date': '9/1/23',
     'Grant Purpose': 'Earlier grant',
+    'Grant Status': 'Payment Cleared',
   },
 ];
 
@@ -570,17 +573,68 @@ describe('handleShowGrantee', () => {
     expect(data.transactions).toHaveLength(2);
   });
 
-  it('should calculate total_amount correctly', () => {
+  it('should calculate total_amount correctly (only cleared transactions)', () => {
     const result = handleShowGrantee(mockTransactions, {
       charity: 'Test Charity',
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data.metadata.total_amount).toBe(20000); // 5000 + 15000
+    expect(data.metadata.total_amount).toBe(20000); // 5000 + 15000 (both cleared)
     expect(data.metadata.total_grants).toBe(2);
+    expect(data.metadata.cleared_grants).toBe(2);
+    expect(data.metadata.non_cleared_grants).toBe(0);
   });
 
-  it('should calculate yearly totals', () => {
-    const result = handleShowGrantee(mockTransactions, {
+  it('should exclude non-cleared transactions from totals', () => {
+    const transactionsWithPending: Transaction[] = [
+      ...mockTransactions,
+      {
+        'Transaction ID': '4',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '25,000.00',
+        'Sent Date': '12/1/24',
+        'Grant Purpose': 'Pending grant',
+        'Grant Status': 'Pending',
+      },
+    ];
+    const result = handleShowGrantee(transactionsWithPending, {
+      charity: 'Test Charity',
+    });
+    const data = JSON.parse(result.content[0].text);
+    // Total amount should only include cleared (20000), not pending (25000)
+    expect(data.metadata.total_amount).toBe(20000);
+    expect(data.metadata.total_grants).toBe(3);
+    expect(data.metadata.cleared_grants).toBe(2);
+    expect(data.metadata.non_cleared_grants).toBe(1);
+    // Should have status breakdown
+    expect(data.status_breakdown).toBeDefined();
+    expect(Array.isArray(data.status_breakdown)).toBe(true);
+    const pendingStatus = data.status_breakdown.find((s: any) => s.status === 'Pending');
+    expect(pendingStatus).toBeDefined();
+    expect(pendingStatus.count).toBe(1);
+    expect(pendingStatus.total_amount).toBe(25000);
+    const clearedStatus = data.status_breakdown.find((s: any) => s.status === 'Payment Cleared');
+    expect(clearedStatus).toBeDefined();
+    expect(clearedStatus.count).toBe(2);
+    expect(clearedStatus.total_amount).toBe(20000);
+  });
+
+  it('should calculate yearly totals (only cleared transactions)', () => {
+    const transactionsWithPending: Transaction[] = [
+      ...mockTransactions,
+      {
+        'Transaction ID': '4',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '25,000.00',
+        'Sent Date': '12/1/24',
+        'Grant Purpose': 'Pending grant',
+        'Grant Status': 'Pending',
+      },
+    ];
+    const result = handleShowGrantee(transactionsWithPending, {
       charity: 'Test Charity',
     });
     const data = JSON.parse(result.content[0].text);
@@ -588,10 +642,11 @@ describe('handleShowGrantee', () => {
     expect(Array.isArray(data.yearly_totals)).toBe(true);
     expect(data.yearly_totals.length).toBeGreaterThan(0);
     
-    const yearlyTotal = data.yearly_totals.find((yt: any) => yt.year === 2024);
-    expect(yearlyTotal).toBeDefined();
-    expect(yearlyTotal.count).toBeGreaterThan(0);
-    expect(yearlyTotal.total_amount).toBeGreaterThan(0);
+    const yearlyTotal2024 = data.yearly_totals.find((yt: any) => yt.year === 2024);
+    expect(yearlyTotal2024).toBeDefined();
+    // Should only include cleared transaction (5000), not pending (25000)
+    expect(yearlyTotal2024.count).toBe(1);
+    expect(yearlyTotal2024.total_amount).toBe(5000);
   });
 
   it('should sort transactions by date (most recent first)', () => {
@@ -659,6 +714,9 @@ describe('handleShowGrantee', () => {
     expect(data.metadata).toHaveProperty('notes');
     expect(data.metadata).toHaveProperty('international');
     expect(data.metadata).toHaveProperty('is_beloved');
+    expect(data.metadata).toHaveProperty('cleared_grants');
+    expect(data.metadata).toHaveProperty('non_cleared_grants');
+    expect(data).toHaveProperty('status_breakdown');
     expect(typeof data.metadata.international).toBe('boolean');
     expect(typeof data.metadata.is_beloved).toBe('boolean');
   });
@@ -668,6 +726,172 @@ describe('handleShowGrantee', () => {
       charity: 'Test Charity',
     });
     expect(result.isError).toBe(true);
+  });
+
+  it('should handle transactions with no Grant Status field', () => {
+    const transactionsNoStatus: Transaction[] = [
+      {
+        'Transaction ID': '5',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '10,000.00',
+        'Sent Date': '1/1/24',
+        'Grant Purpose': 'No status grant',
+      },
+    ];
+    const result = handleShowGrantee(transactionsNoStatus, {
+      charity: 'Test Charity',
+    });
+    const data = JSON.parse(result.content[0].text);
+    // Transaction with no status should be treated as non-cleared
+    expect(data.metadata.total_amount).toBe(0);
+    expect(data.metadata.cleared_grants).toBe(0);
+    expect(data.metadata.non_cleared_grants).toBe(1);
+    // Should appear in status breakdown as "(no status)"
+    const noStatusEntry = data.status_breakdown.find((s: any) => s.status === '(no status)');
+    expect(noStatusEntry).toBeDefined();
+    expect(noStatusEntry.count).toBe(1);
+    expect(noStatusEntry.total_amount).toBe(10000);
+  });
+
+  it('should handle multiple status types correctly', () => {
+    const transactionsMultipleStatuses: Transaction[] = [
+      {
+        'Transaction ID': '6',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '5,000.00',
+        'Sent Date': '1/1/24',
+        'Grant Purpose': 'Cleared grant',
+        'Grant Status': 'Payment Cleared',
+      },
+      {
+        'Transaction ID': '7',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '10,000.00',
+        'Sent Date': '2/1/24',
+        'Grant Purpose': 'Pending grant',
+        'Grant Status': 'Pending',
+      },
+      {
+        'Transaction ID': '8',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '15,000.00',
+        'Sent Date': '3/1/24',
+        'Grant Purpose': 'Cancelled grant',
+        'Grant Status': 'Cancelled',
+      },
+    ];
+    const result = handleShowGrantee(transactionsMultipleStatuses, {
+      charity: 'Test Charity',
+    });
+    const data = JSON.parse(result.content[0].text);
+    // Only cleared should be in total
+    expect(data.metadata.total_amount).toBe(5000);
+    expect(data.metadata.cleared_grants).toBe(1);
+    expect(data.metadata.non_cleared_grants).toBe(2);
+    // Status breakdown should have all three statuses
+    expect(data.status_breakdown).toHaveLength(3);
+    const cleared = data.status_breakdown.find((s: any) => s.status === 'Payment Cleared');
+    const pending = data.status_breakdown.find((s: any) => s.status === 'Pending');
+    const cancelled = data.status_breakdown.find((s: any) => s.status === 'Cancelled');
+    expect(cleared).toBeDefined();
+    expect(cleared.count).toBe(1);
+    expect(cleared.total_amount).toBe(5000);
+    expect(pending).toBeDefined();
+    expect(pending.count).toBe(1);
+    expect(pending.total_amount).toBe(10000);
+    expect(cancelled).toBeDefined();
+    expect(cancelled.count).toBe(1);
+    expect(cancelled.total_amount).toBe(15000);
+  });
+
+  it('should include all transactions in transactions array regardless of status', () => {
+    const transactionsMixed: Transaction[] = [
+      {
+        'Transaction ID': '9',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '5,000.00',
+        'Sent Date': '1/1/24',
+        'Grant Purpose': 'Cleared',
+        'Grant Status': 'Payment Cleared',
+      },
+      {
+        'Transaction ID': '10',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '10,000.00',
+        'Sent Date': '2/1/24',
+        'Grant Purpose': 'Pending',
+        'Grant Status': 'Pending',
+      },
+    ];
+    const result = handleShowGrantee(transactionsMixed, {
+      charity: 'Test Charity',
+    });
+    const data = JSON.parse(result.content[0].text);
+    // All transactions should be in the array
+    expect(data.transactions).toHaveLength(2);
+    // But totals should only include cleared
+    expect(data.metadata.total_amount).toBe(5000);
+  });
+
+  it('should calculate yearly totals correctly with mixed statuses', () => {
+    const transactionsMixedYear: Transaction[] = [
+      {
+        'Transaction ID': '11',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '5,000.00',
+        'Sent Date': '1/15/24',
+        'Grant Purpose': 'Cleared 2024',
+        'Grant Status': 'Payment Cleared',
+      },
+      {
+        'Transaction ID': '12',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '10,000.00',
+        'Sent Date': '2/15/24',
+        'Grant Purpose': 'Pending 2024',
+        'Grant Status': 'Pending',
+      },
+      {
+        'Transaction ID': '13',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '15,000.00',
+        'Sent Date': '1/15/23',
+        'Grant Purpose': 'Cleared 2023',
+        'Grant Status': 'Payment Cleared',
+      },
+    ];
+    const result = handleShowGrantee(transactionsMixedYear, {
+      charity: 'Test Charity',
+    });
+    const data = JSON.parse(result.content[0].text);
+    // 2024 yearly total should only include cleared (5000), not pending (10000)
+    const yearly2024 = data.yearly_totals.find((yt: any) => yt.year === 2024);
+    expect(yearly2024).toBeDefined();
+    expect(yearly2024.count).toBe(1);
+    expect(yearly2024.total_amount).toBe(5000);
+    // 2023 yearly total should include cleared (15000)
+    const yearly2023 = data.yearly_totals.find((yt: any) => yt.year === 2023);
+    expect(yearly2023).toBeDefined();
+    expect(yearly2023.count).toBe(1);
+    expect(yearly2023.total_amount).toBe(15000);
   });
 });
 
