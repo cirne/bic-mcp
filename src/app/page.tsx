@@ -115,13 +115,16 @@ export default function Home() {
             </h2>
             <ul className="space-y-2 text-sm text-gray-600">
               <li>
-                <strong>list_transactions</strong> - Search and filter grant transactions
+                <strong>list_transactions</strong> - Search and filter grant transactions with advanced filtering, sorting, and grouping options
               </li>
               <li>
-                <strong>list_grantees</strong> - List all grantees with aggregated totals
+                <strong>list_grantees</strong> - List all grantees with aggregated totals, transaction counts, and summary data
               </li>
               <li>
-                <strong>show_grantee</strong> - Show detailed grantee information
+                <strong>show_grantee</strong> - Show detailed grantee information including metadata and all transaction history
+              </li>
+              <li>
+                <strong>aggregate_transactions</strong> - Aggregate transactions by category, grantee, year, international status, or status with summary statistics
               </li>
             </ul>
           </div>
