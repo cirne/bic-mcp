@@ -191,26 +191,35 @@ export async function handleMCPGet(request: NextRequest) {
 
 // Handle POST requests (call tools)
 export async function handleMCPPost(request: NextRequest) {
+  console.log('[MCP] POST request received');
+  
   if (!validateApiKey(request)) {
     console.error('[MCP] Unauthorized - missing/invalid API key');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  console.log('[MCP] API key validated');
+
   try {
     const contentType = request.headers.get('content-type') || '';
+    console.log('[MCP] Content-Type:', contentType);
     let body: any;
 
     if (contentType.includes('application/json')) {
       body = await request.json();
+      console.log('[MCP] Body parsed as JSON, method:', body.method || body.name);
     } else {
       const text = await request.text();
       if (text) {
         try {
           body = JSON.parse(text);
+          console.log('[MCP] Body parsed from text, method:', body.method || body.name);
         } catch {
+          console.error('[MCP] Failed to parse body as JSON');
           body = {};
         }
       } else {
+        console.error('[MCP] Empty request body');
         body = {};
       }
     }
@@ -219,9 +228,18 @@ export async function handleMCPPost(request: NextRequest) {
     const method = body.method || body.name;
     const params = body.params || body.arguments || {};
     const isMCPProtocol = !!body.method;
+    
+    console.log('[MCP] Request details:', {
+      method,
+      isMCPProtocol,
+      hasParams: !!params,
+      toolName: params.name || 'N/A',
+    });
 
     // Handle MCP protocol methods
     if (isMCPProtocol) {
+      console.log('[MCP] Processing MCP protocol request, method:', method);
+      
       if (method === 'initialize') {
         // Use the protocol version the client sent, or default to 2024-11-05
         const clientProtocolVersion = params.protocolVersion || '2024-11-05';
@@ -255,6 +273,7 @@ export async function handleMCPPost(request: NextRequest) {
       }
 
       if (method === 'tools/call') {
+        console.log('[MCP] tools/call method detected');
         const toolName = params.name;
         const toolArguments = params.arguments || {};
         
@@ -364,6 +383,7 @@ export async function handleMCPPost(request: NextRequest) {
       }
 
       // Unknown MCP method
+      console.error('[MCP] Unknown MCP method:', method);
       return NextResponse.json({
         jsonrpc: '2.0',
         id: body.id || null,
@@ -375,6 +395,7 @@ export async function handleMCPPost(request: NextRequest) {
     }
 
     // Handle simple format: { name, arguments }
+    console.log('[MCP] Processing simple format request (non-MCP protocol)');
     const toolName = method;
     if (!toolName) {
       console.error('[MCP] ERROR: Tool name or method is required');
