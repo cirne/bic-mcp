@@ -100,9 +100,9 @@ function formatMCPResult(toolName: string, executionResult: MCPToolResult): any 
   if (!jsonText) {
     console.error('[MCP] ERROR: No content text found for tool:', toolName);
     // Still return structuredContent with null/empty to maintain protocol compliance
+    // Claude's MCP client expects ONLY structuredContent when outputSchema exists
     return {
       structuredContent: null,
-      content: executionResult.content,
     };
   }
   
@@ -115,10 +115,9 @@ function formatMCPResult(toolName: string, executionResult: MCPToolResult): any 
     }
     
     // Return structuredContent format (MCP protocol requirement when outputSchema is defined)
-    // Keep content for backward compatibility
+    // Claude's MCP client expects ONLY structuredContent when outputSchema exists, not both fields
     return {
       structuredContent: structuredData,
-      content: executionResult.content,
     };
   } catch (parseError) {
     const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
@@ -131,12 +130,12 @@ function formatMCPResult(toolName: string, executionResult: MCPToolResult): any 
     
     // For tools with outputSchema, we MUST return structuredContent format
     // Return error in structuredContent to maintain protocol compliance
+    // Claude's MCP client expects ONLY structuredContent when outputSchema exists
     return {
       structuredContent: {
         error: 'Failed to parse tool result',
         message: errorMsg,
       },
-      content: executionResult.content,
     };
   }
 }
