@@ -225,28 +225,64 @@ export async function handleMCPPost(request: NextRequest) {
         }
         
         try {
-          console.log('[MCP] tools/call success:', { 
-            toolName, 
-            resultType: typeof executionResult, 
-            hasContent: !!executionResult.content, 
-            contentLength: executionResult.content?.length,
-            contentPreview: executionResult.content?.[0]?.text?.substring(0, 200)
-          });
-          
           // Verify the result structure is valid
           if (!executionResult || !executionResult.content || !Array.isArray(executionResult.content)) {
             console.error('[MCP] ERROR: Invalid result structure:', executionResult);
             return createJsonRpcError(body.id, -32603, 'Invalid result structure from tool handler');
           }
           
-          const response = createJsonRpcSuccess(body.id, executionResult);
+          // Check if tool has outputSchema - if so, use structuredContent format
+          const tool = MCP_TOOLS.find(t => t.name === toolName);
+          const hasOutputSchema = tool && 'outputSchema' in tool && tool.outputSchema;
+          
+          let mcpResult: any;
+          
+          if (hasOutputSchema) {
+            // Parse the JSON from content[0].text to get the actual data
+            try {
+              const jsonText = executionResult.content[0]?.text;
+              if (!jsonText) {
+                throw new Error('No content text found');
+              }
+              const structuredData = JSON.parse(jsonText);
+              
+              // Use structuredContent format when outputSchema is defined
+              mcpResult = {
+                structuredContent: structuredData,
+                // Keep content for backward compatibility
+                content: executionResult.content,
+              };
+              
+              console.log('[MCP] tools/call success (structuredContent):', { 
+                toolName, 
+                hasStructuredContent: true,
+                structuredDataType: typeof structuredData,
+                isArray: Array.isArray(structuredData),
+                preview: JSON.stringify(structuredData).substring(0, 200)
+              });
+            } catch (parseError) {
+              console.error('[MCP] ERROR: Failed to parse content as JSON:', parseError);
+              // Fall back to content format if parsing fails
+              mcpResult = executionResult;
+            }
+          } else {
+            // No outputSchema - use traditional content format
+            mcpResult = executionResult;
+            console.log('[MCP] tools/call success (content):', { 
+              toolName, 
+              hasStructuredContent: false,
+              contentLength: executionResult.content?.length
+            });
+          }
+          
+          const response = createJsonRpcSuccess(body.id, mcpResult);
           
           // Try to serialize to catch any JSON errors and log response size
           try {
             const fullResponse = {
               jsonrpc: '2.0',
               id: body.id !== undefined ? body.id : null,
-              result: executionResult,
+              result: mcpResult,
             };
             const testSerialization = JSON.stringify(fullResponse);
             const responseSizeKB = Math.round(testSerialization.length / 1024);

@@ -235,7 +235,7 @@ describe('handleMCPPost', () => {
       expect(data.result.tools).toEqual(TOOLS);
     });
 
-    it('should handle tools/call method', async () => {
+    it('should handle tools/call method with structuredContent when outputSchema exists', async () => {
       const mockResult = {
         content: [{ type: 'text' as const, text: JSON.stringify([{ id: 1 }]) }],
       };
@@ -261,7 +261,12 @@ describe('handleMCPPost', () => {
       expect(response.status).toBe(200);
       expect(data.jsonrpc).toBe('2.0');
       expect(data.id).toBe(3);
-      expect(data.result).toEqual(mockResult);
+      // Should have structuredContent when outputSchema is defined
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toEqual([{ id: 1 }]);
+      // Should also have content for backward compatibility
+      expect(data.result).toHaveProperty('content');
+      expect(data.result.content).toEqual(mockResult.content);
       expect(handleListTransactions).toHaveBeenCalledWith(mockTransactions, { year: 2024 });
     });
 
