@@ -72,7 +72,7 @@ export const MCP_TOOLS = [
       },
       required: [],
     },
-    ...(ENABLE_OUTPUT_SCHEMA && {
+    ...(ENABLE_OUTPUT_SCHEMA ? {
       outputSchema: {
         oneOf: [
           {
@@ -126,7 +126,7 @@ export const MCP_TOOLS = [
           },
         ],
       },
-    }),
+    } : {}),
   },
   {
     name: 'list_grantees',
@@ -159,7 +159,7 @@ export const MCP_TOOLS = [
       },
       required: [],
     },
-    ...(ENABLE_OUTPUT_SCHEMA && {
+    ...(ENABLE_OUTPUT_SCHEMA ? {
       outputSchema: {
         type: 'array',
         description: 'Array of grantee summary objects',
@@ -198,7 +198,7 @@ export const MCP_TOOLS = [
           required: ['name', 'ein', 'international', 'is_beloved', 'most_recent_grant_note', 'transaction_count', 'total_amount'],
         },
       },
-    }),
+    } : {}),
   },
   {
     name: 'show_grantee',
@@ -217,7 +217,7 @@ export const MCP_TOOLS = [
       },
       required: ['charity'],
     },
-    ...(ENABLE_OUTPUT_SCHEMA && {
+    ...(ENABLE_OUTPUT_SCHEMA ? {
       outputSchema: {
         type: 'object',
         description: 'Detailed grantee information with metadata, statistics, and transaction history',
@@ -353,7 +353,7 @@ export const MCP_TOOLS = [
         },
         required: ['metadata', 'status_breakdown', 'yearly_totals', 'transactions'],
       },
-    }),
+    } : {}),
   },
   {
     name: 'aggregate_transactions',
@@ -411,7 +411,7 @@ export const MCP_TOOLS = [
       },
       required: ['group_by'],
     },
-    ...(ENABLE_OUTPUT_SCHEMA && {
+    ...(ENABLE_OUTPUT_SCHEMA ? {
       outputSchema: {
         type: 'array',
         description: 'Array of aggregated results, one object per group',
@@ -538,7 +538,7 @@ export const MCP_TOOLS = [
           ],
         },
       },
-    }),
+    } : {}),
   },
 ];
 
