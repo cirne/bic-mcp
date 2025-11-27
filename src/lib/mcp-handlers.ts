@@ -5,6 +5,7 @@ import {
   matchesCharity,
   matchesMinAmount,
   matchesMaxAmount,
+  matchesGrantStatus,
   sortTransactions,
   groupTransactions,
   selectFields,
@@ -33,6 +34,7 @@ export function handleListTransactions(
     search_term?: string;
     charity?: string;
     category?: string;
+    grant_status?: string;
     year?: number;
     min_year?: number;
     max_year?: number;
@@ -49,6 +51,7 @@ export function handleListTransactions(
     search_term: searchTerm,
     charity,
     category,
+    grant_status: grantStatus,
     year,
     min_year: minYear,
     max_year: maxYear,
@@ -80,6 +83,18 @@ export function handleListTransactions(
         {
           type: 'text',
           text: 'Error: charity must be a string if provided',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  if (grantStatus !== undefined && typeof grantStatus !== 'string') {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: grant_status must be a string if provided',
         },
       ],
       isError: true,
@@ -151,6 +166,11 @@ export function handleListTransactions(
   // Apply exact charity filter first (most specific)
   if (charity !== undefined) {
     matches = matches.filter(t => matchesCharity(t, charity));
+  }
+
+  // Apply grant_status filter
+  if (grantStatus !== undefined) {
+    matches = matches.filter(t => matchesGrantStatus(t, grantStatus));
   }
 
   // Apply year filter (exact year)
@@ -600,7 +620,7 @@ export function handleShowGrantee(
 export function handleAggregateTransactions(
   transactions: Transaction[],
   args: {
-    group_by: 'category' | 'grantee' | 'year' | 'international' | 'is_beloved';
+    group_by: 'category' | 'grantee' | 'year' | 'international' | 'is_beloved' | 'status';
     year?: number;
     min_year?: number;
     max_year?: number;
@@ -628,12 +648,12 @@ export function handleAggregateTransactions(
   } = args;
 
   // Validate group_by
-  if (!groupBy || !['category', 'grantee', 'year', 'international', 'is_beloved'].includes(groupBy)) {
+  if (!groupBy || !['category', 'grantee', 'year', 'international', 'is_beloved', 'status'].includes(groupBy)) {
     return {
       content: [
         {
           type: 'text',
-          text: 'Error: group_by must be one of: category, grantee, year, international, is_beloved',
+          text: 'Error: group_by must be one of: category, grantee, year, international, is_beloved, status',
         },
       ],
       isError: true,
@@ -687,8 +707,10 @@ export function handleAggregateTransactions(
     });
   }
 
-  // Only include Payment Cleared grants
-  matches = matches.filter(t => getStringValue(t['Grant Status']) === 'Payment Cleared');
+  // Only include Payment Cleared grants (unless grouping by status, in which case include all statuses)
+  if (groupBy !== 'status') {
+    matches = matches.filter(t => getStringValue(t['Grant Status']) === 'Payment Cleared');
+  }
 
   // Aggregate by group_by field
   const aggregated: Record<string, { count: number; total_amount: number; name?: string }> = {};
@@ -720,6 +742,9 @@ export function handleAggregateTransactions(
       const ein = getStringValue(transaction.EIN).trim();
       const isBelovedValue = getGranteeIsBeloved(charityName, ein);
       key = isBelovedValue ? 'true' : 'false';
+    } else if (groupBy === 'status') {
+      const status = getStringValue(transaction['Grant Status']).trim();
+      key = status || '(no status)';
     } else {
       key = 'Unknown';
     }
@@ -751,6 +776,8 @@ export function handleAggregateTransactions(
       fieldName = 'international';
     } else if (groupBy === 'is_beloved') {
       fieldName = 'is_beloved';
+    } else if (groupBy === 'status') {
+      fieldName = 'status';
     } else {
       fieldName = groupBy;
     }
@@ -777,6 +804,12 @@ export function handleAggregateTransactions(
     result.sort((a, b) => {
       const nameA = (('category' in a && typeof a.category === 'string' ? a.category : '') || '').toLowerCase();
       const nameB = (('category' in b && typeof b.category === 'string' ? b.category : '') || '').toLowerCase();
+      return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    });
+  } else if (sortBy === 'name' && groupBy === 'status') {
+    result.sort((a, b) => {
+      const nameA = (('status' in a && typeof a.status === 'string' ? a.status : '') || '').toLowerCase();
+      const nameB = (('status' in b && typeof b.status === 'string' ? b.status : '') || '').toLowerCase();
       return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
     });
   }

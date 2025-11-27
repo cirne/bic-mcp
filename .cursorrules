@@ -84,7 +84,7 @@ When categorizing grants, use these four buckets:
 ### MCP Tools
 
 #### `list_transactions` - Search/filter transactions
-**Parameters:** `search_term`, `charity` (exact match), `year`/`min_year`/`max_year`, `min_amount`/`max_amount`, `sort_by`, `sort_order`, `group_by`, `fields`
+**Parameters:** `search_term`, `charity` (exact match), `grant_status` (e.g., "Pending", "Payment Cleared", "Cancelled", "Reversed", "Denied"), `year`/`min_year`/`max_year`, `min_amount`/`max_amount`, `sort_by`, `sort_order`, `group_by`, `fields`
 
 #### `list_grantees` - List grantees with aggregated totals
 **Parameters:** `year`, `sort_by` ("name", "ein", "recent_date", "total_amount"), `sort_order`
@@ -97,7 +97,7 @@ When categorizing grants, use these four buckets:
 
 #### `aggregate_transactions` - Aggregate transactions with summary statistics
 **Parameters:** 
-- `group_by` (required): "category", "grantee", or "year"
+- `group_by` (required): "category", "grantee", "year", "international", "is_beloved", or "status"
 - `year`/`min_year`/`max_year`: Filter by year range
 - `min_amount`/`max_amount`: Filter by amount range
 - `category`: Filter by category when grouping by grantee or year
@@ -105,8 +105,8 @@ When categorizing grants, use these four buckets:
 - `sort_by`: "count", "total_amount", or "name" (default: "total_amount")
 - `sort_order`: "asc" or "desc" (default: "desc")
 **Returns:** Array of objects with `name`, `count`, and `total_amount` for each group
-**Use for:** Category breakdowns, yearly totals, grantee summaries, international vs domestic analysis
-**Note:** Only includes "Payment Cleared" grants
+**Use for:** Category breakdowns, yearly totals, grantee summaries, international vs domestic analysis, status breakdowns
+**Note:** Only includes "Payment Cleared" grants (unless grouping by status, in which case all statuses are included)
 
 ### Implementation Notes
 - Fuzzy search uses Fuse.js (threshold 0.4)

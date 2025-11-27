@@ -92,6 +92,13 @@ export function matchesMaxAmount(transaction: Transaction, maxAmount: number): b
   return amount <= maxAmount;
 }
 
+// Helper function to check if a transaction matches the grant_status filter
+export function matchesGrantStatus(transaction: Transaction, grantStatus: string): boolean {
+  if (!grantStatus) return true;
+  const transactionStatus = getStringValue(transaction['Grant Status']).trim();
+  return transactionStatus.toLowerCase() === grantStatus.toLowerCase().trim();
+}
+
 // Helper function to sort transactions
 export function sortTransactions(transactions: Transaction[], sortBy: string, sortOrder: 'asc' | 'desc' = 'asc'): Transaction[] {
   if (!sortBy) return transactions;

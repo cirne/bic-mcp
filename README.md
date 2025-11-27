@@ -98,6 +98,7 @@ Search and filter grant transactions with advanced options.
 **Parameters:**
 - `search_term` (string, optional) - Fuzzy search across all fields
 - `charity` (string, optional) - Exact charity name match (case-insensitive)
+- `grant_status` (string, optional) - Filter by grant status (e.g., "Pending", "Payment Cleared", "Cancelled", "Reversed", "Denied"). Case-insensitive match.
 - `year` (number, optional) - Filter by exact year
 - `min_year` (number, optional) - Filter from this year onwards
 - `max_year` (number, optional) - Filter up to this year

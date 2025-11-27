@@ -3,6 +3,7 @@ import {
   handleListTransactions,
   handleListGrantees,
   handleShowGrantee,
+  handleAggregateTransactions,
 } from './mcp-handlers';
 import type { Transaction } from './filters';
 
@@ -73,6 +74,16 @@ const mockTransactions: Transaction[] = [
     'Grant Purpose': 'Earlier grant',
     'Grant Status': 'Payment Cleared',
   },
+  {
+    'Transaction ID': '4',
+    'Charity': 'Pending Charity',
+    'EIN': '11-1111111',
+    'Charity Address': '789 Elm St',
+    'Amount': '20,000.00',
+    'Sent Date': '',
+    'Grant Purpose': 'Pending grant',
+    'Grant Status': 'Pending',
+  },
 ];
 
 describe('handleListTransactions', () => {
@@ -80,7 +91,7 @@ describe('handleListTransactions', () => {
     const result = handleListTransactions(mockTransactions, {});
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
-    expect(data).toHaveLength(3);
+    expect(data).toHaveLength(4);
     // Check that Category, International, and Is Beloved are included
     expect(data[0]).toHaveProperty('Category');
     expect(data[0]).toHaveProperty('International');
@@ -97,6 +108,27 @@ describe('handleListTransactions', () => {
     expect(data).toHaveLength(2);
     expect(data[0].Charity).toBe('Test Charity');
     expect(data[1].Charity).toBe('Test Charity');
+  });
+
+  it('should filter by grant_status', () => {
+    const result = handleListTransactions(mockTransactions, {
+      grant_status: 'Pending',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toHaveLength(1);
+    expect(data[0]['Grant Status']).toBe('Pending');
+    expect(data[0].Charity).toBe('Pending Charity');
+  });
+
+  it('should filter by grant_status case-insensitively', () => {
+    const result = handleListTransactions(mockTransactions, {
+      grant_status: 'payment cleared',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.length).toBeGreaterThanOrEqual(3);
+    data.forEach((t: Transaction) => {
+      expect(t['Grant Status']?.toLowerCase()).toBe('payment cleared');
+    });
   });
 
   it('should filter by year', () => {
@@ -133,7 +165,7 @@ describe('handleListTransactions', () => {
       min_amount: 10000,
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data).toHaveLength(2);
+    expect(data).toHaveLength(3);
     data.forEach((t: Transaction) => {
       const amountStr = typeof t.Amount === 'string' ? t.Amount : '';
       const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
@@ -313,6 +345,14 @@ describe('handleListTransactions', () => {
     expect(result.isError).toBe(true);
   });
 
+  it('should return error for invalid grant_status type', () => {
+    const result = handleListTransactions(mockTransactions, {
+      grant_status: 123 as any, // Invalid type
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('grant_status');
+  });
+
   it('should handle empty transactions array', () => {
     const result = handleListTransactions([], {});
     const data = JSON.parse(result.content[0].text);
@@ -399,7 +439,7 @@ describe('handleListGrantees', () => {
     const result = handleListGrantees(mockTransactions, {});
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
-    expect(data).toHaveLength(2);
+    expect(data).toHaveLength(3);
     expect(data[0]).toHaveProperty('name');
     expect(data[0]).toHaveProperty('ein');
     expect(data[0]).toHaveProperty('international');
@@ -892,6 +932,256 @@ describe('handleShowGrantee', () => {
     expect(yearly2023).toBeDefined();
     expect(yearly2023.count).toBe(1);
     expect(yearly2023.total_amount).toBe(15000);
+  });
+});
+
+describe('handleAggregateTransactions', () => {
+  const transactionsForAggregation: Transaction[] = [
+    {
+      'Transaction ID': '1',
+      'Charity': 'Test Charity',
+      'EIN': '12-3456789',
+      'Charity Address': '123 Main St',
+      'Amount': '5,000.00',
+      'Sent Date': '10/2/24',
+      'Grant Purpose': 'Test grant',
+      'Grant Status': 'Payment Cleared',
+    },
+    {
+      'Transaction ID': '2',
+      'Charity': 'Test Charity',
+      'EIN': '12-3456789',
+      'Charity Address': '123 Main St',
+      'Amount': '10,000.00',
+      'Sent Date': '11/15/24',
+      'Grant Purpose': 'Another grant',
+      'Grant Status': 'Payment Cleared',
+    },
+    {
+      'Transaction ID': '3',
+      'Charity': 'Pending Charity',
+      'EIN': '11-1111111',
+      'Charity Address': '789 Elm St',
+      'Amount': '20,000.00',
+      'Sent Date': '',
+      'Grant Purpose': 'Pending grant',
+      'Grant Status': 'Pending',
+    },
+    {
+      'Transaction ID': '4',
+      'Charity': 'Cancelled Charity',
+      'EIN': '22-2222222',
+      'Charity Address': '456 Oak Ave',
+      'Amount': '15,000.00',
+      'Sent Date': '',
+      'Grant Purpose': 'Cancelled grant',
+      'Grant Status': 'Cancelled',
+    },
+    {
+      'Transaction ID': '5',
+      'Charity': 'Reversed Charity',
+      'EIN': '33-3333333',
+      'Charity Address': '789 Pine St',
+      'Amount': '8,000.00',
+      'Sent Date': '9/1/24',
+      'Grant Purpose': 'Reversed grant',
+      'Grant Status': 'Reversed',
+    },
+  ];
+
+  it('should aggregate by status and include all statuses', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThanOrEqual(4); // Payment Cleared, Pending, Cancelled, Reversed
+    
+    // Find Payment Cleared
+    const cleared = data.find((item: any) => item.status === 'Payment Cleared');
+    expect(cleared).toBeDefined();
+    expect(cleared.count).toBe(2);
+    expect(cleared.total_amount).toBe(15000); // 5000 + 10000
+    
+    // Find Pending
+    const pending = data.find((item: any) => item.status === 'Pending');
+    expect(pending).toBeDefined();
+    expect(pending.count).toBe(1);
+    expect(pending.total_amount).toBe(20000);
+    
+    // Find Cancelled
+    const cancelled = data.find((item: any) => item.status === 'Cancelled');
+    expect(cancelled).toBeDefined();
+    expect(cancelled.count).toBe(1);
+    expect(cancelled.total_amount).toBe(15000);
+    
+    // Find Reversed
+    const reversed = data.find((item: any) => item.status === 'Reversed');
+    expect(reversed).toBeDefined();
+    expect(reversed.count).toBe(1);
+    expect(reversed.total_amount).toBe(8000);
+  });
+
+  it('should aggregate by status with year filter', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+      year: 2024,
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // Payment Cleared should have 2 transactions from 2024
+    const cleared = data.find((item: any) => item.status === 'Payment Cleared');
+    expect(cleared).toBeDefined();
+    expect(cleared.count).toBe(2);
+    
+    // Reversed should have 1 transaction from 2024
+    const reversed = data.find((item: any) => item.status === 'Reversed');
+    expect(reversed).toBeDefined();
+    expect(reversed.count).toBe(1);
+  });
+
+  it('should aggregate by status with amount filter', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+      min_amount: 10000,
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // Payment Cleared should have 1 transaction >= 10000
+    const cleared = data.find((item: any) => item.status === 'Payment Cleared');
+    expect(cleared).toBeDefined();
+    expect(cleared.count).toBe(1);
+    expect(cleared.total_amount).toBe(10000);
+    
+    // Pending should have 1 transaction >= 10000
+    const pending = data.find((item: any) => item.status === 'Pending');
+    expect(pending).toBeDefined();
+    expect(pending.count).toBe(1);
+    expect(pending.total_amount).toBe(20000);
+  });
+
+  it('should sort status aggregation by total_amount descending', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+      sort_by: 'total_amount',
+      sort_order: 'desc',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // First item should be Pending (20000)
+    expect(data[0].status).toBe('Pending');
+    expect(data[0].total_amount).toBe(20000);
+  });
+
+  it('should sort status aggregation by count ascending', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+      sort_by: 'count',
+      sort_order: 'asc',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // First item should have count of 1
+    expect(data[0].count).toBe(1);
+  });
+
+  it('should handle transactions with no status when aggregating by status', () => {
+    const transactionsWithNoStatus: Transaction[] = [
+      {
+        'Transaction ID': '1',
+        'Charity': 'Test Charity',
+        'EIN': '12-3456789',
+        'Charity Address': '123 Main St',
+        'Amount': '5,000.00',
+        'Sent Date': '10/2/24',
+        'Grant Purpose': 'Test grant',
+        'Grant Status': '',
+      },
+    ];
+    const result = handleAggregateTransactions(transactionsWithNoStatus, {
+      group_by: 'status',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // Should have an entry for "(no status)"
+    const noStatus = data.find((item: any) => item.status === '(no status)');
+    expect(noStatus).toBeDefined();
+    expect(noStatus.count).toBe(1);
+    expect(noStatus.total_amount).toBe(5000);
+  });
+
+  it('should return error for invalid group_by value', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'invalid' as any,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('group_by');
+  });
+
+  it('should include all statuses when grouping by status, not just Payment Cleared', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    
+    // Should have multiple statuses, not just Payment Cleared
+    const statuses = data.map((item: any) => item.status);
+    expect(statuses).toContain('Payment Cleared');
+    expect(statuses).toContain('Pending');
+    expect(statuses).toContain('Cancelled');
+    expect(statuses).toContain('Reversed');
+    
+    // Total count should be 5 (all transactions)
+    const totalCount = data.reduce((sum: number, item: any) => sum + item.count, 0);
+    expect(totalCount).toBe(5);
+  });
+
+  it('should still filter to Payment Cleared when grouping by other fields', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'grantee',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    
+    // Should only include Payment Cleared transactions
+    // Test Charity has 2 Payment Cleared transactions
+    const testCharity = data.find((item: any) => item.grantee?.includes('Test Charity'));
+    expect(testCharity).toBeDefined();
+    expect(testCharity.count).toBe(2);
+    expect(testCharity.total_amount).toBe(15000);
+    
+    // Pending Charity should not appear (only Payment Cleared included)
+    const pendingCharity = data.find((item: any) => item.grantee?.includes('Pending Charity'));
+    expect(pendingCharity).toBeUndefined();
+  });
+
+  it('should sort status aggregation by name', () => {
+    const result = handleAggregateTransactions(transactionsForAggregation, {
+      group_by: 'status',
+      sort_by: 'name',
+      sort_order: 'asc',
+    });
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    
+    // Should be sorted alphabetically by status name
+    const statuses = data.map((item: any) => item.status);
+    const sortedStatuses = [...statuses].sort((a, b) => a.localeCompare(b));
+    expect(statuses).toEqual(sortedStatuses);
   });
 });
 
