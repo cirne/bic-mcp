@@ -16,7 +16,9 @@
     "test:coverage": "vitest run --coverage",
     "test:manual": "node test.js",
     "test:client": "node test-client.js",
-    "test:filter": "node test-filter.js"
+    "test:filter": "node test-filter.js",
+    "data-update": "tsx scripts/update-transactions.ts",
+    "consolidate-grants": "tsx scripts/consolidate-grants.ts"
   },
   "keywords": [
     "mcp",
@@ -34,7 +36,8 @@
     "next": "^16.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.14",

@@ -32,3 +32,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Data backups (auto-generated, can regenerate from XLSX)
+data/backups/
