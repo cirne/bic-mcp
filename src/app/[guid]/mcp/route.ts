@@ -21,9 +21,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ guid: string }> }) {
   const { guid } = await params;
+  console.log('[MCP Route] POST request received, GUID:', guid);
+  
   if (!validateGuid(guid)) {
+    console.error('[MCP Route] GUID validation failed:', guid);
     return new Response('Not Found', { status: 404 });
   }
+  
+  console.log('[MCP Route] GUID validated, forwarding to handleMCPPost');
   return handleMCPPost(request);
 }
 
