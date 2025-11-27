@@ -270,6 +270,188 @@ describe('handleMCPPost', () => {
       expect(handleListTransactions).toHaveBeenCalledWith(mockTransactions, { year: 2024 });
     });
 
+    it('should return structuredContent for list_grantees tool', async () => {
+      const mockGrantees = [{ name: 'Test Charity', ein: '12-3456789', total_amount: 1000 }];
+      const mockResult = {
+        content: [{ type: 'text' as const, text: JSON.stringify(mockGrantees) }],
+      };
+      vi.mocked(handleListGrantees).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 4,
+          params: {
+            name: 'list_grantees',
+            arguments: {},
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toEqual(mockGrantees);
+      expect(data.result).toHaveProperty('content');
+    });
+
+    it('should return structuredContent for show_grantee tool', async () => {
+      const mockGranteeData = {
+        metadata: { name: 'Test Charity', ein: '12-3456789' },
+        transactions: [],
+      };
+      const mockResult = {
+        content: [{ type: 'text' as const, text: JSON.stringify(mockGranteeData) }],
+      };
+      vi.mocked(handleShowGrantee).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 5,
+          params: {
+            name: 'show_grantee',
+            arguments: { charity: 'Test Charity' },
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toEqual(mockGranteeData);
+      expect(data.result).toHaveProperty('content');
+    });
+
+    it('should return structuredContent for aggregate_transactions tool', async () => {
+      const mockAggregated = [{ category: 'Evangelism', count: 5, total_amount: 5000 }];
+      const mockResult = {
+        content: [{ type: 'text' as const, text: JSON.stringify(mockAggregated) }],
+      };
+      vi.mocked(handleAggregateTransactions).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 6,
+          params: {
+            name: 'aggregate_transactions',
+            arguments: { group_by: 'category' },
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toEqual(mockAggregated);
+      expect(data.result).toHaveProperty('content');
+    });
+
+    it('should handle invalid JSON in content by returning structured error', async () => {
+      const mockResult = {
+        content: [{ type: 'text' as const, text: 'invalid json { broken' }],
+      };
+      vi.mocked(handleListTransactions).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 7,
+          params: {
+            name: 'list_transactions',
+            arguments: {},
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toHaveProperty('error');
+      expect(data.result.structuredContent.error).toBe('Failed to parse tool result');
+      expect(data.result.structuredContent).toHaveProperty('message');
+      expect(data.result).toHaveProperty('content');
+    });
+
+    it('should handle empty content text by returning structuredContent with null', async () => {
+      const mockResult = {
+        content: [{ type: 'text' as const, text: '' }],
+      };
+      vi.mocked(handleListTransactions).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 8,
+          params: {
+            name: 'list_transactions',
+            arguments: {},
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toBeNull();
+      expect(data.result).toHaveProperty('content');
+    });
+
+    it('should handle null parsed data by still returning structuredContent', async () => {
+      const mockResult = {
+        content: [{ type: 'text' as const, text: JSON.stringify(null) }],
+      };
+      vi.mocked(handleListTransactions).mockReturnValue(mockResult);
+
+      const request = createMockRequest({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          id: 9,
+          params: {
+            name: 'list_transactions',
+            arguments: {},
+          },
+        },
+      });
+
+      const response = await handleMCPPost(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.result).toHaveProperty('structuredContent');
+      expect(data.result.structuredContent).toBeNull();
+      expect(data.result).toHaveProperty('content');
+    });
+
     it('should return error when tool name is missing in tools/call', async () => {
       const request = createMockRequest({
         method: 'POST',
