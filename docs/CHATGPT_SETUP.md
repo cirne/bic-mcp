@@ -1,22 +1,40 @@
-# Setting Up ChatGPT Desktop with BIC Grants MCP Server
+# Setting Up ChatGPT with BIC Grants MCP Server
 
-This guide explains how to connect ChatGPT Desktop to your deployed BIC Grants MCP Server.
+This guide explains how to connect ChatGPT (Desktop, Web, or iOS) to your deployed BIC Grants MCP Server.
 
 ## Prerequisites
 
-- ChatGPT Desktop app installed
+- ChatGPT Desktop app, Web app (chat.openai.com or chatgpt.com), or iOS app installed
 - Access to your deployed MCP server URL (e.g., `https://your-project.vercel.app/{guid}/mcp` where `{guid}` is your MCP_GUID)
 - Your MCP GUID (provided by the server administrator - acts as the security token)
 - Your MCP API key (optional, if additional authentication is configured)
 
 ## Step 1: Enable Developer Mode
 
+### Desktop App
 1. Open ChatGPT Desktop
 2. Click on your profile icon in the bottom-left corner
 3. Select **Settings**
 4. Navigate to **Apps & Connectors**
 5. Scroll down to **Advanced settings**
 6. Toggle on **Developer mode**
+
+### Web App
+1. Go to [chat.openai.com](https://chat.openai.com) or [chatgpt.com](https://chatgpt.com)
+2. Click on your profile icon in the bottom-left corner
+3. Select **Settings**
+4. Navigate to **Apps & Connectors**
+5. Scroll down to **Advanced settings**
+6. Toggle on **Developer mode**
+
+**Note for Business/Enterprise Plans:** Only admins or owners can enable Developer Mode. Navigate to **Workspace Settings** → **Permissions & Roles** → **Connected Data Developer Mode** to enable it.
+
+### iOS App
+1. Open the ChatGPT app on your iOS device
+2. Navigate to **Settings**
+3. Select **Apps & Connectors**
+4. Tap on **Advanced Settings**
+5. Toggle **Developer Mode** to the "On" position
 
 ## Step 2: Create a Connector
 
@@ -48,16 +66,154 @@ Or:
 - **Header Name**: `X-API-Key`
 - **Header Value**: `YOUR_API_KEY`
 
-## Step 4: Test the Connection
+## Step 4: Configure Tool Approval (Bypass Confirmations)
 
-1. Start a new chat in ChatGPT Desktop
-2. Click the **+** button near the message composer
+By default, ChatGPT requires confirmation for each tool invocation. The method to bypass these confirmations varies by platform:
+
+**⚠️ Important:** The iOS app currently does **not** provide any option to bypass tool confirmations. Each tool invocation requires manual confirmation. This is a known limitation of the iOS app.
+
+> **Note:** For detailed research findings and platform-specific solutions, see [MCP_APPROVAL_RESEARCH.md](./MCP_APPROVAL_RESEARCH.md)
+
+### Option A: Desktop App (Persistent Configuration)
+
+For ChatGPT Desktop, you can configure persistent auto-approval by editing the `mcp_config.json` configuration file.
+
+#### Locate the Configuration File
+
+The configuration file is located at:
+- **macOS**: `~/Library/Application Support/OpenAI/ChatGPT/mcp_config.json`
+- **Windows**: `%APPDATA%\OpenAI\ChatGPT\mcp_config.json`
+- **Linux**: `~/.config/OpenAI/ChatGPT/mcp_config.json`
+
+If the file doesn't exist, create it.
+
+#### Configure Auto-Approve for BIC Grants Tools
+
+Edit the `mcp_config.json` file and add your connector configuration with an `autoApprove` array listing all the tools you want to auto-approve:
+
+```json
+{
+  "mcpServers": {
+    "BIC Grants": {
+      "url": "https://your-project.vercel.app/{guid}/mcp",
+      "autoApprove": [
+        "list_transactions",
+        "list_grantees",
+        "show_grantee",
+        "aggregate_transactions"
+      ]
+    }
+  }
+}
+```
+
+**Important Notes:**
+- Replace `{guid}` with your actual MCP_GUID
+- Replace `"BIC Grants"` with the exact name you used when creating the connector in Step 2 (must match exactly, including capitalization)
+- The `autoApprove` array lists all tool names that should execute without confirmation
+- After editing, **restart ChatGPT Desktop** for changes to take effect
+- If the connector was added through the UI, you may need to check the existing `mcp_config.json` file to see how it's stored, or add this configuration alongside any existing entries
+
+#### Alternative: Global Approval Policy (Desktop Only)
+
+If you want to auto-approve all tools from all MCP servers (not recommended for security), you can set a global approval policy:
+
+```json
+{
+  "approval_policy": "never",
+  "mcpServers": {
+    "BIC Grants": {
+      "url": "https://your-project.vercel.app/{guid}/mcp"
+    }
+  }
+}
+```
+
+**Approval Policy Options:**
+- `"never"`: Never prompt for approval (all tools execute automatically)
+- `"on-request"`: Prompt for approval whenever a tool is requested
+- `"on-failure"`: Prompt for approval only when a tool fails
+- `"untrusted"`: Prompt for approval when executing commands from untrusted sources
+
+**Security Warning:** Setting `approval_policy` to `"never"` grants full autonomy to all MCP servers. Only use this if you completely trust all connected servers. The per-server `autoApprove` approach is safer.
+
+### Option B: Web App (Browser Extension)
+
+For ChatGPT Web App, you can use the **"MCP Auto Accept for ChatGPT"** browser extension to automatically handle confirmation dialogs.
+
+#### Install the Extension
+
+1. **Chrome/Edge/Brave**: Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/mcp-auto-accept-for-chatg/hgmlcoonafjeljbcndajnambopiccndg) and click "Add to Chrome"
+2. **Firefox**: Search for the extension in Firefox Add-ons (if available)
+
+#### Use the Extension
+
+1. After installation, click the extension icon in your browser toolbar
+2. Toggle the extension **On** to enable auto-accept
+3. The extension will automatically:
+   - Detect ChatGPT confirmation dialogs
+   - Check the "don't ask again" checkbox
+   - Click the confirm button
+
+**Note:** This extension works for Chrome-based browsers. Safari on macOS/iOS does not support browser extensions in the same way.
+
+### Option C: Session-Based "Remember Approval" (Web Only - May Not Be Available)
+
+**Note:** As of the current ChatGPT version, the "remember approval" checkbox may not be available in all confirmation dialogs. This feature appears to be inconsistently implemented or may have been removed. **The iOS app does not have this feature at all** - confirmation dialogs only show "Confirm" and "Deny" buttons with no checkbox option.
+
+If available on the web app:
+1. When ChatGPT prompts you to confirm a tool invocation, look for a checkbox labeled **"Don't ask again"** or **"Remember this approval"**
+2. Check this box before confirming
+3. For the remainder of that conversation session, ChatGPT will automatically approve that tool without prompting
+
+**Limitations:**
+- Only applies to the current conversation session
+- Resets when you start a new chat or refresh the page
+- You must do this for each tool individually
+- Not persistent across sessions
+- **May not be available** - the checkbox may not appear in all confirmation dialogs
+- **Not available on iOS** - iOS confirmation dialogs do not include this option
+
+### Recommendation
+
+- **Desktop App**: Use Option A (persistent configuration file) for the best experience - this is the only reliable way to bypass confirmations
+- **Web App**: Use Option B (browser extension) for persistent auto-approval - this is the most reliable solution for web
+- **iOS App**: **Unfortunately, there is currently no way to bypass tool confirmations on iOS**. Each tool invocation requires manual confirmation. This is a limitation of the iOS app at this time. Consider using the web app with the browser extension for a better experience.
+
+### Note About Read-Only Tools
+
+**✅ UPDATE:** All BIC Grants MCP tools are read-only (they only query data, never modify it) and now include the `readOnlyHint: true` annotation. According to OpenAI's documentation:
+
+> "In contrast, read actions, which involve retrieving or searching for information without altering external systems, do not require such confirmations."
+>
+> "ChatGPT respects the `readOnlyHint` tool annotation to identify read-only tools, any tool without this hint is treated as a write action and will prompt for confirmation accordingly."
+
+**Source**: https://platform.openai.com/docs/guides/developer-mode
+
+**After deploying this update**, ChatGPT should recognize these tools as read-only and may not require confirmations (or require fewer confirmations). However, platform-specific limitations may still apply:
+- **iOS**: May still require confirmations due to platform limitations
+- **Web**: Should work better with the annotation, but browser extension is still recommended for reliability
+- **Desktop**: Should work best with both the annotation and `mcp_config.json` configuration
+
+## Step 5: Test the Connection
+
+### Desktop/Web App
+1. Start a new chat in ChatGPT
+2. Click the **+** button near the message composer (or select **Developer Mode** from the Plus menu)
 3. Select **More** or **Connectors**
 4. Choose your **BIC Grants** connector
 5. Try asking ChatGPT to use the MCP server:
    - "List the top 10 grantees by total amount"
    - "Show me all grants to [Charity Name]"
    - "Find all grants from 2024"
+
+### iOS App
+1. Start a new chat in the ChatGPT iOS app
+2. Tap the **+** button or select your connector from the available options
+3. Choose your **BIC Grants** connector
+4. Try asking ChatGPT to use the MCP server with the same queries above
+
+If you configured auto-approval correctly (via config file, browser extension, or "remember approval"), tool invocations should execute without confirmation prompts.
 
 ## Available Tools
 
@@ -101,7 +257,7 @@ Get detailed information about a specific grantee.
 
 3. **Check Developer Mode**: Ensure Developer Mode is enabled in ChatGPT settings
 
-4. **Review Logs**: Check ChatGPT Desktop logs for connection errors
+4. **Review Logs**: Check ChatGPT logs for connection errors (Desktop app logs or browser console for web app)
 
 ### 401 Unauthorized Error
 
@@ -112,8 +268,9 @@ Get detailed information about a specific grantee.
 ### Tools Not Available
 
 - Ensure the connector is enabled in your current chat
-- Try restarting ChatGPT Desktop
+- Try restarting ChatGPT (Desktop app) or refreshing the page (Web app)
 - Verify the MCP server is responding correctly
+- For web app, ensure Developer Mode is enabled in your account settings
 
 ## Security Notes
 
@@ -127,6 +284,6 @@ If you encounter issues:
 
 1. Check the [DEPLOY.md](./DEPLOY.md) for server-side troubleshooting
 2. Verify your MCP server is accessible via curl/Postman
-3. Review ChatGPT Desktop documentation for connector setup
+3. Review ChatGPT documentation for connector setup (varies by platform)
 4. Contact the server administrator for API key or access issues
 

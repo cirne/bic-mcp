@@ -72,6 +72,9 @@ export const MCP_TOOLS = [
       },
       required: [],
     },
+    annotations: {
+      readOnlyHint: true,
+    },
     ...(ENABLE_OUTPUT_SCHEMA ? {
       outputSchema: {
         oneOf: [
@@ -199,6 +202,9 @@ export const MCP_TOOLS = [
         },
       },
     } : {}),
+    annotations: {
+      readOnlyHint: true,
+    },
   },
   {
     name: 'show_grantee',
@@ -354,6 +360,9 @@ export const MCP_TOOLS = [
         required: ['metadata', 'status_breakdown', 'yearly_totals', 'transactions'],
       },
     } : {}),
+    annotations: {
+      readOnlyHint: true,
+    },
   },
   {
     name: 'aggregate_transactions',
@@ -539,6 +548,9 @@ export const MCP_TOOLS = [
         },
       },
     } : {}),
+    annotations: {
+      readOnlyHint: true,
+    },
   },
 ];
 
