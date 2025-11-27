@@ -86,6 +86,61 @@ function executeTool(toolName: string, transactions: Transaction[], args: any): 
   }
 }
 
+// Format MCP tool result for response (handles structuredContent when outputSchema exists)
+function formatMCPResult(toolName: string, executionResult: MCPToolResult): any {
+  const tool = MCP_TOOLS.find(t => t.name === toolName);
+  const hasOutputSchema = tool && 'outputSchema' in tool && tool.outputSchema;
+  
+  if (!hasOutputSchema) {
+    return executionResult;
+  }
+  
+  // Parse JSON from content[0].text to get structured data
+  const jsonText = executionResult.content[0]?.text;
+  if (!jsonText) {
+    console.error('[MCP] ERROR: No content text found for tool:', toolName);
+    // Still return structuredContent with null/empty to maintain protocol compliance
+    return {
+      structuredContent: null,
+      content: executionResult.content,
+    };
+  }
+  
+  try {
+    const structuredData = JSON.parse(jsonText);
+    
+    // Validate that parsed data matches expected structure (basic check)
+    if (structuredData === null || structuredData === undefined) {
+      console.warn('[MCP] WARNING: Parsed data is null/undefined for tool:', toolName);
+    }
+    
+    // Return structuredContent format (MCP protocol requirement when outputSchema is defined)
+    // Keep content for backward compatibility
+    return {
+      structuredContent: structuredData,
+      content: executionResult.content,
+    };
+  } catch (parseError) {
+    const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+    const preview = jsonText.substring(0, 200);
+    console.error('[MCP] ERROR: Failed to parse JSON for tool:', toolName, {
+      error: errorMsg,
+      preview,
+      contentLength: jsonText.length,
+    });
+    
+    // For tools with outputSchema, we MUST return structuredContent format
+    // Return error in structuredContent to maintain protocol compliance
+    return {
+      structuredContent: {
+        error: 'Failed to parse tool result',
+        message: errorMsg,
+      },
+      content: executionResult.content,
+    };
+  }
+}
+
 // Create JSON-RPC error response
 function createJsonRpcError(id: any, code: number, message: string) {
   return NextResponse.json({
@@ -231,72 +286,38 @@ export async function handleMCPPost(request: NextRequest) {
             return createJsonRpcError(body.id, -32603, 'Invalid result structure from tool handler');
           }
           
-          // Check if tool has outputSchema - if so, use structuredContent format
-          const tool = MCP_TOOLS.find(t => t.name === toolName);
-          const hasOutputSchema = tool && 'outputSchema' in tool && tool.outputSchema;
+          // Format result (handles structuredContent when outputSchema exists)
+          const mcpResult = formatMCPResult(toolName, executionResult);
+          const hasStructuredContent = 'structuredContent' in mcpResult;
           
-          let mcpResult: any;
+          console.log('[MCP] tools/call success:', { 
+            toolName, 
+            format: hasStructuredContent ? 'structuredContent' : 'content',
+            preview: hasStructuredContent 
+              ? JSON.stringify(mcpResult.structuredContent).substring(0, 200)
+              : mcpResult.content[0]?.text?.substring(0, 200)
+          });
           
-          if (hasOutputSchema) {
-            // Parse the JSON from content[0].text to get the actual data
-            try {
-              const jsonText = executionResult.content[0]?.text;
-              if (!jsonText) {
-                throw new Error('No content text found');
-              }
-              const structuredData = JSON.parse(jsonText);
-              
-              // Use structuredContent format when outputSchema is defined
-              mcpResult = {
-                structuredContent: structuredData,
-                // Keep content for backward compatibility
-                content: executionResult.content,
-              };
-              
-              console.log('[MCP] tools/call success (structuredContent):', { 
-                toolName, 
-                hasStructuredContent: true,
-                structuredDataType: typeof structuredData,
-                isArray: Array.isArray(structuredData),
-                preview: JSON.stringify(structuredData).substring(0, 200)
-              });
-            } catch (parseError) {
-              console.error('[MCP] ERROR: Failed to parse content as JSON:', parseError);
-              // Fall back to content format if parsing fails
-              mcpResult = executionResult;
-            }
-          } else {
-            // No outputSchema - use traditional content format
-            mcpResult = executionResult;
-            console.log('[MCP] tools/call success (content):', { 
-              toolName, 
-              hasStructuredContent: false,
-              contentLength: executionResult.content?.length
-            });
-          }
-          
-          const response = createJsonRpcSuccess(body.id, mcpResult);
-          
-          // Try to serialize to catch any JSON errors and log response size
+          // Validate serialization and log response size
           try {
-            const fullResponse = {
-              jsonrpc: '2.0',
+            const testResponse = {
+              jsonrpc: '2.0' as const,
               id: body.id !== undefined ? body.id : null,
               result: mcpResult,
             };
-            const testSerialization = JSON.stringify(fullResponse);
-            const responseSizeKB = Math.round(testSerialization.length / 1024);
-            console.log('[MCP] Result serialization test passed, response size:', responseSizeKB, 'KB');
+            const serialized = JSON.stringify(testResponse);
+            const responseSizeKB = Math.round(serialized.length / 1024);
+            console.log('[MCP] Response serialization validated, size:', responseSizeKB, 'KB');
             
             if (responseSizeKB > 1000) {
-              console.warn('[MCP] WARNING: Large response size may cause issues:', responseSizeKB, 'KB');
+              console.warn('[MCP] WARNING: Large response size:', responseSizeKB, 'KB');
             }
           } catch (serialError) {
             console.error('[MCP] ERROR: Result cannot be serialized:', serialError);
             return createJsonRpcError(body.id, -32603, `Result serialization error: ${serialError instanceof Error ? serialError.message : String(serialError)}`);
           }
           
-          return response;
+          return createJsonRpcSuccess(body.id, mcpResult);
         } catch (error) {
           console.error('[MCP] ERROR creating response:', toolName, error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
           return createJsonRpcError(body.id, -32603, `Error creating response: ${error instanceof Error ? error.message : String(error)}`);
