@@ -46,6 +46,64 @@ function getTransactions() {
   return cachedTransactions;
 }
 
+// Load transactions with error handling
+function loadTransactionsSafely(): { transactions: Transaction[] } | { error: string } {
+  try {
+    const transactions = getTransactions();
+    if (!transactions || transactions.length === 0) {
+      console.error('[MCP] WARNING: No transactions loaded');
+      return { error: 'No transactions available. Please check data files.' };
+    }
+    return { transactions };
+  } catch (error) {
+    console.error('[MCP] ERROR loading transactions:', error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
+    return { error: `Failed to load transactions: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Execute a tool handler with error handling
+function executeTool(toolName: string, transactions: Transaction[], args: any): MCPToolResult | { error: string } {
+  const handler = TOOL_HANDLERS[toolName];
+  if (!handler) {
+    console.error('[MCP] ERROR: Unknown tool requested:', toolName);
+    return { error: `Unknown tool: ${toolName}. Available: ${getAvailableToolNames().join(', ')}` };
+  }
+
+  try {
+    const result = handler(transactions, args);
+    
+    // Check if handler returned an error
+    if (result.isError) {
+      const errorText = result.content[0]?.text || 'Unknown error occurred';
+      console.error('[MCP] Tool returned error:', toolName, errorText);
+      return { error: errorText };
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[MCP] ERROR executing tool:', toolName, error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : '');
+    return { error: `Internal error executing tool: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+// Create JSON-RPC error response
+function createJsonRpcError(id: any, code: number, message: string) {
+  return NextResponse.json({
+    jsonrpc: '2.0',
+    id: id !== undefined ? id : null,
+    error: { code, message },
+  });
+}
+
+// Create JSON-RPC success response
+function createJsonRpcSuccess(id: any, result: any) {
+  return NextResponse.json({
+    jsonrpc: '2.0',
+    id: id !== undefined ? id : null,
+    result,
+  });
+}
+
 // API key validation
 export function validateApiKey(request: NextRequest): boolean {
   const apiKey = process.env.MCP_API_KEY;
@@ -143,54 +201,31 @@ export async function handleMCPPost(request: NextRequest) {
         const toolName = params.name;
         const toolArguments = params.arguments || {};
         
+        console.log('[MCP] tools/call request:', { toolName, toolArguments: JSON.stringify(toolArguments) });
+        
         if (!toolName) {
           console.error('[MCP] ERROR: Missing tool name in params');
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id: body.id !== undefined ? body.id : null,
-            error: {
-              code: -32602,
-              message: 'Invalid params: tool name is required',
-            },
-          });
+          return createJsonRpcError(body.id, -32602, 'Invalid params: tool name is required');
         }
 
-        const transactions = getTransactions();
+        // Load transactions
+        const transactionsResult = loadTransactionsSafely();
+        if ('error' in transactionsResult) {
+          return createJsonRpcError(body.id, -32603, transactionsResult.error);
+        }
+        const { transactions } = transactionsResult;
         
-        // Get handler from map (single source of truth)
-        const handler = TOOL_HANDLERS[toolName];
-        if (!handler) {
-          console.error('[MCP] ERROR: Unknown tool requested:', toolName);
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id: body.id !== undefined ? body.id : null,
-            error: {
-              code: -32601,
-              message: `Unknown tool: ${toolName}. Available: ${getAvailableToolNames().join(', ')}`,
-            },
-          });
+        // Execute tool
+        const executionResult = executeTool(toolName, transactions, toolArguments);
+        if ('error' in executionResult) {
+          // Use appropriate error code based on error type
+          const isUnknownTool = executionResult.error.includes('Unknown tool');
+          const errorCode = isUnknownTool ? -32601 : -32603;
+          return createJsonRpcError(body.id, errorCode, executionResult.error);
         }
         
-        let result;
-        try {
-          result = handler(transactions, toolArguments);
-          
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id: body.id !== undefined ? body.id : null,
-            result: result,
-          });
-        } catch (error) {
-          console.error('[MCP] ERROR executing tool:', toolName, error instanceof Error ? error.message : String(error));
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id: body.id !== undefined ? body.id : null,
-            error: {
-              code: -32603,
-              message: `Internal error executing tool: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          });
-        }
+        console.log('[MCP] tools/call success:', { toolName, resultType: typeof executionResult, hasContent: !!executionResult.content, contentLength: executionResult.content?.length });
+        return createJsonRpcSuccess(body.id, executionResult);
       }
 
       // Unknown MCP method
@@ -214,30 +249,39 @@ export async function handleMCPPost(request: NextRequest) {
       );
     }
 
-    const transactions = getTransactions();
-    
-    // Get handler from map (single source of truth)
-    const handler = TOOL_HANDLERS[toolName];
-    if (!handler) {
-      console.error('[MCP] ERROR: Unknown tool requested:', toolName);
+    // Load transactions
+    const transactionsResult = loadTransactionsSafely();
+    if ('error' in transactionsResult) {
       return NextResponse.json(
-        { error: `Unknown tool: ${toolName}`, available: getAvailableToolNames() },
-        { status: 400 }
-      );
-    }
-    
-    let result;
-    try {
-      result = handler(transactions, params || {});
-
-      return NextResponse.json(result);
-    } catch (error) {
-      console.error('[MCP] ERROR executing tool:', toolName, error instanceof Error ? error.message : String(error));
-      return NextResponse.json(
-        { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+        { error: transactionsResult.error },
         { status: 500 }
       );
     }
+    const { transactions } = transactionsResult;
+    
+    // Execute tool
+    const executionResult = executeTool(toolName, transactions, params || {});
+    if ('error' in executionResult) {
+      // Check if it's an unknown tool error (400) vs execution error (500)
+      const isUnknownTool = executionResult.error.includes('Unknown tool');
+      const isInternalError = executionResult.error.includes('Internal error executing tool');
+      
+      if (isInternalError) {
+        // Extract the actual error message for details field
+        const errorMessage = executionResult.error.replace('Internal error executing tool: ', '');
+        return NextResponse.json(
+          { error: 'Internal server error', details: errorMessage },
+          { status: 500 }
+        );
+      }
+      
+      return NextResponse.json(
+        { error: executionResult.error, ...(isUnknownTool ? { available: getAvailableToolNames() } : {}) },
+        { status: isUnknownTool ? 400 : 500 }
+      );
+    }
+
+    return NextResponse.json(executionResult);
   } catch (error) {
     console.error('[MCP] FATAL ERROR:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
