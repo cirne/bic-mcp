@@ -79,7 +79,7 @@ bic-mcp/
 │   └── styles/
 │       └── globals.css        # Tailwind styles
 ├── server/                    # Standalone servers
-│   └── server.js             # Stdio server for Cursor
+│   └── server.ts             # Stdio server for Cursor
 ├── data/                      # CSV files (add your data here)
 ├── public/                     # Static assets
 ├── package.json
