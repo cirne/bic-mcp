@@ -1,13 +1,13 @@
 {
   "mcpServers": {
     "bic-grants": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "/Users/cirne/dev/bic-mcp/server.js"
+        "tsx",
+        "server/server.ts"
       ],
       "env": {}
     }
   }
 }
-
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
@@ -26,7 +26,7 @@ const dataDir = join(__dirname, '..', 'data');
 let transactions = loadTransactions(dataDir);
 
 // Create MCP server
-const server = new Server(
+const mcpServer = new McpServer(
   {
     name: 'bic-grants',
     version: '1.0.0',
@@ -38,6 +38,9 @@ const server = new Server(
   }
 );
 
+// Access underlying Server instance for request handlers
+const server = mcpServer.server;
+
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -46,7 +49,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 // Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   const { name, arguments: args } = request.params;
 
   let result: { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
@@ -81,7 +84,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Start server with stdio transport
 async function main() {
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await mcpServer.connect(transport);
   console.error('BIC Grants MCP server running on stdio');
 }
 

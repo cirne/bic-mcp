@@ -76,6 +76,20 @@ When categorizing grants, use these four buckets:
 
 ## PART B: Development Guidelines
 
+### File Creation Guidelines
+
+**IMPORTANT:** Before creating new files, ask for user permission if the file is:
+- A documentation markdown file (`.md` files) - unless explicitly requested
+- A one-off or temporary test script (e.g., `test-*.js`, `manual-test-*.js`) - unless explicitly requested
+- Any temporary or experimental file
+
+**Do NOT create** documentation files or one-off test scripts without explicit user approval. The codebase should remain clean and not be polluted with temporary files.
+
+**Exceptions:** 
+- Files explicitly requested by the user
+- Standard test files in the test suite (e.g., `*.test.ts` files using Vitest)
+- Files that are part of the project structure (e.g., configuration files, source code files)
+
 ### Data Structure
 - **Dates**: Format M/D/YY (e.g., "10/2/25" = October 2, 2025). Years 00-30 = 2000-2030, 31-99 = 1931-1999
 - **Amounts**: Strings with commas and trailing spaces (e.g., "500,000.00 "). Parse: `amountStr.replace(/,/g, '').replace(/\s/g, '')` then `parseFloat()`

@@ -1,7 +1,7 @@
 // MCP tool definitions - shared between HTTP API handler and stdio server
 
 // Flag to enable/disable outputSchema in tool definitions
-// Set to false to disable outputSchema (useful for testing tool discovery issues)
+// Set to false to disable outputSchema because we cant get it to work with claude
 const ENABLE_OUTPUT_SCHEMA = false;
 
 export const MCP_TOOLS = [
